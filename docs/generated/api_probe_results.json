@@ -1,0 +1,263 @@
+{
+  "probed_at_utc": "2026-10-17T05:50:53.116258+00:00",
+  "network": {
+    "country": "US",
+    "region": "Ohio",
+    "org": "AS396982 Google LLC"
+  },
+  "results": [
+    {
+      "exchange": "upbit",
+      "endpoint": "REST markets",
+      "transport": "REST",
+      "url": "https://api.upbit.com/v1/market/all",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 1057,
+      "rate_limit_header": "group=market; min=600; sec=9",
+      "body_head": "[{\"market\":\"BTC-BERA\",\"korean_name\":\"베라체인\",\"english_name\":\"Berachain\"},{\"market\":\"BTC-FIL\",\"korean_name\":\"파일코인\",\"english_name\":\"Filecoin\"},{\"market\":\"BTC-SIGN\","
+    },
+    {
+      "exchange": "upbit",
+      "endpoint": "REST candles 1h",
+      "transport": "REST",
+      "url": "https://api.upbit.com/v1/candles/minutes/60?market=KRW-BTC&count=1",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 225,
+      "rate_limit_header": "group=candles; min=600; sec=9",
+      "body_head": "[{\"market\":\"KRW-BTC\",\"candle_date_time_utc\":\"2026-10-17T05:00:00\",\"candle_date_time_kst\":\"2026-10-17T14:00:00\",\"opening_price\":109806000.00000000,\"high_price\":1"
+    },
+    {
+      "exchange": "upbit",
+      "endpoint": "REST orderbook",
+      "transport": "REST",
+      "url": "https://api.upbit.com/v1/orderbook?markets=KRW-BTC",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 222,
+      "rate_limit_header": "group=orderbook; min=600; sec=9",
+      "body_head": "[{\"market\":\"KRW-BTC\",\"timestamp\":1792216220176,\"total_ask_size\":1.57551425,\"total_bid_size\":1.06473309,\"orderbook_units\":[{\"bid_price\":109944000,\"bid_size\":0.02"
+    },
+    {
+      "exchange": "upbit",
+      "endpoint": "REST trades/ticks",
+      "transport": "REST",
+      "url": "https://api.upbit.com/v1/trades/ticks?market=KRW-BTC&count=1",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 226,
+      "rate_limit_header": "group=crix-trades; min=600; sec=9",
+      "body_head": "[{\"market\":\"KRW-BTC\",\"trade_date_utc\":\"2026-10-17\",\"trade_time_utc\":\"05:50:18\",\"timestamp\":1792216218174,\"trade_price\":109950000.00000000,\"trade_volume\":0.00009"
+    },
+    {
+      "exchange": "upbit",
+      "endpoint": "REST KRW-USDT ticker",
+      "transport": "REST",
+      "url": "https://api.upbit.com/v1/ticker?markets=KRW-USDT",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 223,
+      "rate_limit_header": "group=ticker; min=600; sec=9",
+      "body_head": "[{\"market\":\"KRW-USDT\",\"trade_date\":\"20261017\",\"trade_time\":\"055020\",\"trade_date_kst\":\"20261017\",\"trade_time_kst\":\"145020\",\"trade_timestamp\":1792216220117,\"openi"
+    },
+    {
+      "exchange": "bithumb",
+      "endpoint": "REST markets",
+      "transport": "REST",
+      "url": "https://api.bithumb.com/v1/market/all",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 922,
+      "rate_limit_header": "",
+      "body_head": "[{\"market\":\"KRW-BTC\",\"korean_name\":\"비트코인\",\"english_name\":\"Bitcoin\"},{\"market\":\"KRW-ETH\",\"korean_name\":\"이더리움\",\"english_name\":\"Ethereum\"},{\"market\":\"KRW-ETC\",\"kor"
+    },
+    {
+      "exchange": "binance",
+      "endpoint": "fapi ticker/price",
+      "transport": "REST",
+      "url": "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT",
+      "status": 451,
+      "verdict": "BLOCKED",
+      "latency_ms": 348,
+      "rate_limit_header": "",
+      "body_head": "{   \"code\": 0,   \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact custom"
+    },
+    {
+      "exchange": "binance",
+      "endpoint": "fapi openInterest",
+      "transport": "REST",
+      "url": "https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT",
+      "status": 451,
+      "verdict": "BLOCKED",
+      "latency_ms": 37,
+      "rate_limit_header": "",
+      "body_head": "{   \"code\": 0,   \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact custom"
+    },
+    {
+      "exchange": "binance",
+      "endpoint": "fapi premiumIndex",
+      "transport": "REST",
+      "url": "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT",
+      "status": 451,
+      "verdict": "BLOCKED",
+      "latency_ms": 38,
+      "rate_limit_header": "",
+      "body_head": "{   \"code\": 0,   \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact custom"
+    },
+    {
+      "exchange": "binance",
+      "endpoint": "fapi fundingRate",
+      "transport": "REST",
+      "url": "https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1",
+      "status": 451,
+      "verdict": "BLOCKED",
+      "latency_ms": 37,
+      "rate_limit_header": "",
+      "body_head": "{   \"code\": 0,   \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact custom"
+    },
+    {
+      "exchange": "binance",
+      "endpoint": "openInterestHist",
+      "transport": "REST",
+      "url": "https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&limit=1",
+      "status": 451,
+      "verdict": "BLOCKED",
+      "latency_ms": 37,
+      "rate_limit_header": "",
+      "body_head": "{   \"code\": 0,   \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact custom"
+    },
+    {
+      "exchange": "binance",
+      "endpoint": "archive metrics",
+      "transport": "REST",
+      "url": "https://data.binance.vision/data/futures/um/daily/metrics/BTCUSDT/BTCUSDT-metrics-2024-01-01.zip",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 520,
+      "rate_limit_header": "",
+      "body_head": "PK\u0003\u0004\u0014\u0000\u0000\u0000\b\u0000�)\"X�8�_/,\u0000\u0000\u0013y\u0000\u0000\u001e\u0000\u001c\u0000BTCUSDT-metrics-2024-01-01.csvUT\t\u0000\u0003M��eM��eux\u000b\u0000\u0001\u0004�\u0003\u0000\u0000\u0004�\u0003\u0000\u0000}]ݮ^�m��S�\u0001ԍ��O/۾A�k�M�6�c\u0005�\u0012�oߵH�=��\b�\rD9�\u000e�̐���ߟ~����?����������|���"
+    },
+    {
+      "exchange": "binance",
+      "endpoint": "archive fundingRate",
+      "transport": "REST",
+      "url": "https://data.binance.vision/data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2024-01.zip",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 209,
+      "rate_limit_header": "",
+      "body_head": "PK\u0003\u0004\u0014\u0000\u0000\u0000\b\u0000CqQXt\u0001���\u0001\u0000\u0000\u0002 \u0000\u0000\u001f\u0000\u001c\u0000BTCUSDT-fundingRate-2024-01.csvUT\t\u0000\u0003>��e>��eux\u000b\u0000\u0001\u0004�\u0003\u0000\u0000\u0004�\u0003\u0000\u0000u�݊�0\u0010F��,���h�&�m�\r�)d�}��Q\f�W_nL8��y|4����v|\\~�\u000f??o?.�����8�����_>�\u001f"
+    },
+    {
+      "exchange": "binance",
+      "endpoint": "archive liquidationSnapshot",
+      "transport": "REST",
+      "url": "https://data.binance.vision/data/futures/um/daily/liquidationSnapshot/BTCUSDT/BTCUSDT-liquidationSnapshot-2024-01-01.zip",
+      "status": 404,
+      "verdict": "NOT_PUBLISHED",
+      "latency_ms": 491,
+      "rate_limit_header": "",
+      "body_head": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message><Key>data/futures/um/daily/liquidationSn"
+    },
+    {
+      "exchange": "bybit",
+      "endpoint": "v5 tickers",
+      "transport": "REST",
+      "url": "https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT",
+      "status": 403,
+      "verdict": "BLOCKED",
+      "latency_ms": 400,
+      "rate_limit_header": "",
+      "body_head": "{     error:The Amazon CloudFront distribution is configured to block access from your country }"
+    },
+    {
+      "exchange": "bybit",
+      "endpoint": "v5 open-interest",
+      "transport": "REST",
+      "url": "https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1h&limit=1",
+      "status": 403,
+      "verdict": "BLOCKED",
+      "latency_ms": 40,
+      "rate_limit_header": "",
+      "body_head": "{     error:The Amazon CloudFront distribution is configured to block access from your country }"
+    },
+    {
+      "exchange": "okx",
+      "endpoint": "public open-interest",
+      "transport": "REST",
+      "url": "https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=BTC-USDT-SWAP",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 532,
+      "rate_limit_header": "",
+      "body_head": "{\"code\":\"0\",\"data\":[{\"instId\":\"BTC-USDT-SWAP\",\"instType\":\"SWAP\",\"oi\":\"3046649.55000000935\",\"oiCcy\":\"30466.4955000000935\",\"oiUsd\":\"2484204529.92495762388715\",\"ts"
+    },
+    {
+      "exchange": "okx",
+      "endpoint": "funding-rate-history",
+      "transport": "REST",
+      "url": "https://www.okx.com/api/v5/public/funding-rate-history?instId=BTC-USDT-SWAP&limit=1",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 247,
+      "rate_limit_header": "",
+      "body_head": "{\"code\":\"0\",\"data\":[{\"formulaType\":\"withRate\",\"fundingRate\":\"0.0001\",\"fundingTime\":\"1792195200000\",\"instId\":\"BTC-USDT-SWAP\",\"instType\":\"SWAP\",\"method\":\"current_"
+    },
+    {
+      "exchange": "okx",
+      "endpoint": "rubik OI history",
+      "transport": "REST",
+      "url": "https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId=BTC-USDT-SWAP&period=1H&limit=1",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 248,
+      "rate_limit_header": "",
+      "body_head": "{\"code\":\"0\",\"data\":[[\"1792213200000\",\"3045973.25000000923\",\"30459.7325000000923\",\"2483473369.9225075254959\"]],\"msg\":\"\"}"
+    },
+    {
+      "exchange": "okx",
+      "endpoint": "spot ticker BTC-USDT",
+      "transport": "REST",
+      "url": "https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT",
+      "status": 200,
+      "verdict": "OK",
+      "latency_ms": 219,
+      "rate_limit_header": "",
+      "body_head": "{\"code\":\"0\",\"data\":[{\"instType\":\"SPOT\",\"instId\":\"BTC-USDT\",\"last\":\"81568\",\"lastSz\":\"0.00059096\",\"askPx\":\"81568.1\",\"askSz\":\"0.46004656\",\"bidPx\":\"81568\",\"bidSz\":\""
+    },
+    {
+      "exchange": "upbit",
+      "endpoint": "wss://api.upbit.com/websocket/v1",
+      "transport": "WS",
+      "url": "wss://api.upbit.com/websocket/v1",
+      "status": null,
+      "verdict": "OK",
+      "latency_ms": 1359,
+      "rate_limit_header": "",
+      "body_head": "b'{\"type\":\"trade\",\"code\":\"KRW-BTC\",\"timestamp\":1792216222784,\"trade_date\":\"2026-10-17\",\"trade_time\":\"05:50:22\",\"trade_timestamp\":1792216222742,\"trade_price\":109"
+    },
+    {
+      "exchange": "okx",
+      "endpoint": "wss://ws.okx.com/ws/v5/public",
+      "transport": "WS",
+      "url": "wss://ws.okx.com/ws/v5/public",
+      "status": null,
+      "verdict": "OK",
+      "latency_ms": 1199,
+      "rate_limit_header": "",
+      "body_head": "{\"event\":\"subscribe\",\"arg\":{\"channel\":\"liquidation-orders\",\"instType\":\"SWAP\"},\"connId\":\"3fa870ec\"}"
+    },
+    {
+      "exchange": "binance",
+      "endpoint": "wss://fstream.binance.com/ws/btcusdt@forceOrder",
+      "transport": "WS",
+      "url": "wss://fstream.binance.com/ws/btcusdt@forceOrder",
+      "status": null,
+      "verdict": "ERROR",
+      "latency_ms": 24661,
+      "rate_limit_header": "",
+      "body_head": "TimeoutError: "
+    }
+  ]
+}

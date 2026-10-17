@@ -1,0 +1,43 @@
+# crypto-auto-trader default configuration.
+# LIVE trading is disabled here and additionally requires a signed approval file (docs/LIVE_RUNBOOK.md).
+mode: PAPER
+data_dir: data
+ops_db: data/ops/ops_paper.sqlite
+markets: [KRW-BTC, KRW-ETH, KRW-XRP, KRW-USDT]
+futures_symbols:   # Upbit market -> external USDT-M perpetual used only as a filter/regime signal
+  KRW-BTC: BTCUSDT
+  KRW-ETH: ETHUSDT
+  KRW-XRP: XRPUSDT
+strategy_allocation_krw: 300000
+capital:
+  total_capital_krw: 10000000
+  protected_external_krw: 7000000     # never auto-transferred to the exchange
+  max_trading_capital_krw: 3000000
+  initial_live_allocation_krw: 300000
+  max_total_loss_krw: 3000000
+  emergency_cum_loss_krw: 1500000     # internal hard stop (kill switch)
+risk:
+  per_trade_risk_cap_krw: 30000
+  per_trade_risk_pct: 0.015
+  daily_loss_cap_krw: 60000
+  daily_loss_pct: 0.03
+  max_exposure_pct: 1.0
+  max_positions: 3
+  max_orders_per_minute: 6
+  consecutive_loss_scale_after: 3
+  consecutive_loss_scale: 0.5
+  drawdown_scale_start_pct: 0.05
+  min_size_scale: 0.25
+  market_data_stale_ms: 15000
+  derivatives_stale_ms: 900000
+  max_clock_skew_ms: 2000
+  max_spread_bps: 30
+  price_jump_sigma: 8
+  min_order_krw: 5000
+costs:
+  scenarios: {optimistic: 0.0016, base: 0.0030, stress: 0.0050}   # round-trip, fee+spread+slippage
+  upbit_fee_rate: 0.0005      # per side; re-checked at runtime via /v1/orders/chance
+  max_bar_participation: 0.05
+live:
+  enabled: false
+  approval_file: config/live_approval.json

@@ -1,0 +1,13 @@
+data/
+!data/.gitkeep
+.venv/
+__pycache__/
+*.pyc
+.env
+config/live.yaml
+config/live_approval.json
+.pytest_cache/
+.ruff_cache/
+reports/*.html
+!reports/samples/
+logs/

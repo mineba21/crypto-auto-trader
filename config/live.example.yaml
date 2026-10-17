@@ -1,0 +1,8 @@
+# Copy to config/live.yaml ONLY after completing docs/LIVE_RUNBOOK.md. Still needs config/live_approval.json.
+mode: LIVE
+ops_db: data/ops/ops_live.sqlite
+markets: [KRW-BTC]
+strategy_allocation_krw: 300000
+live:
+  enabled: true
+  approval_file: config/live_approval.json

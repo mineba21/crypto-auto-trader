@@ -1,0 +1,51 @@
+[project]
+name = "crypto-auto-trader"
+version = "0.1.0"
+description = "Upbit KRW spot long-only auto trading system: data collection, event-driven backtest, paper/live brokers and risk management"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb>=1.5.6",
+    "fastapi>=0.143.3",
+    "httpx>=0.28.1",
+    "numpy>=2.5.4",
+    "pandas>=3.0.6",
+    "polars>=2.0.0",
+    "pyarrow>=26.0.0",
+    "pydantic>=2.14.1",
+    "pyjwt>=2.15.1",
+    "pyyaml>=6.0.3",
+    "uvicorn>=0.54.0",
+    "websockets>=17.2",
+]
+
+[project.scripts]
+cat = "crypto_trader.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "crypto_trader"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["network: tests that hit real public exchange APIs (deselect with -m 'not network')"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "respx>=0.23.1",
+    "ruff>=0.17.1",
+]
