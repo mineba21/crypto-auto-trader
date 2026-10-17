@@ -44,6 +44,7 @@ class LiveSession:
         self.last_book: OrderBookSnapshot | None = None
         self.last_bar_open: int | None = None
         self.exiting = False
+        self.started_ms = now_ms()
 
     # ------------------------------------------------------------ callbacks
     def on_trade(self, t: Trade) -> None:
@@ -113,6 +114,8 @@ class LiveSession:
 
     def health(self) -> None:
         now = now_ms()
+        if now - self.started_ms < 30_000 and self.last_trade is None:
+            return  # startup grace: streams are still connecting
         reason = market_data_guard(now, self.last_trade.received_ts if self.last_trade else None,
                                    self.last_book.spread_bps if self.last_book else None, self.s)
         # low-liquidity markets can legitimately be quiet; use the book as liveness too

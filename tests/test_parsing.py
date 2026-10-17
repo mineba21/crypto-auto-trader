@@ -72,3 +72,10 @@ def test_zip_roundtrip_unzip():
         z.writestr("x.csv", "a,b\n1,2\n")
     assert BinanceArchive._unzip(buf.getvalue()) == b"a,b\n1,2\n"
     assert isinstance(pl.DataFrame(), pl.DataFrame)
+
+
+def test_binance_metrics_with_empty_ratio_fields():
+    m = parse_metrics(b"create_time,symbol,sum_open_interest,sum_open_interest_value,count_toptrader_long_short_ratio,"
+                      b"sum_toptrader_long_short_ratio,count_long_short_ratio,sum_taker_long_short_vol_ratio\n"
+                      b"2023-01-01 00:00:00,BTCUSDT,1.0,2.0,,,,\n")
+    assert m["oi_usd"][0] == 2.0 and m["global_ls_ratio"][0] is None

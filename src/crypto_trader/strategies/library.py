@@ -85,14 +85,16 @@ class _SmcBase(Strategy):
         sw = _swing_cols(f, p["left"], p["right"])
         f.cols["sweep_low"] = smc.bullish_sweep(f.low, f.close, sw, f["atr"], p["sweep_min_atr"], p["sweep_max_atr"])
         f.cols["sw_last_high"] = sw.last_high
+        f.cols["sw_prev_high"] = sw.prev_high
         return f
 
     def _tp(self, i, f, entry, stop):
         risk = entry - stop
         if self.params["tp_mode"] == "structure":
-            sh = f["sw_last_high"][i]
-            if np.isfinite(sh) and sh > entry + risk:
-                return sh
+            # nearest confirmed swing high at least 1R above entry (last, else the one before it)
+            for sh in (f["sw_last_high"][i], f["sw_prev_high"][i]):
+                if np.isfinite(sh) and sh > entry + risk:
+                    return sh
         return entry + self.params["rr"] * risk
 
     def _recent_sweep(self, i, f, k):
@@ -224,8 +226,11 @@ class B2LiquidationReversal(Strategy):
 
     def entry(self, i, f):
         p = self.params
-        ret = np.nanmin(f["ret_n"][max(0, i - p["recover_n"]):i + 1])
-        oi = np.nanmin(f["oi_chg_24h"][max(0, i - p["recover_n"]):i + 1])
+        lo = max(0, i - p["recover_n"])
+        rets, ois = f["ret_n"][lo:i + 1], f["oi_chg_24h"][lo:i + 1].astype(float)
+        if np.all(np.isnan(rets)) or np.all(np.isnan(ois)):
+            return None
+        ret, oi = np.nanmin(rets), np.nanmin(ois)
         if not (ret < -p["drop_pct"] and oi < p["oi_flush"]):
             return None
         if p["require_liquidations"]:
@@ -304,7 +309,7 @@ class C2CvdDivergence(Strategy):
 
     def entry(self, i, f):
         p = self.params
-        if not f["_, ok"][i]:
+        if not f["c2_ok"][i]:
             return None
         lo = max(0, i - p["confirm_n"])
         if f["div"][lo:i].any() and f.close[i] > f.open[i] and f.close[i] > f.high[i - 1]:

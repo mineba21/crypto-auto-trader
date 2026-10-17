@@ -63,7 +63,7 @@ def parse_klines(raw: bytes) -> pl.DataFrame:
     return df.select(
         normalize_epoch_ms(pl.col("open_time").cast(pl.Int64)).alias("open_ts"),
         (normalize_epoch_ms(pl.col("close_time").cast(pl.Int64)) + 1).alias("close_ts"),
-        *[pl.col(c).cast(pl.Float64) for c in ("open", "high", "low", "close", "volume", "quote_volume",
+        *[pl.col(c).cast(pl.Float64, strict=False) for c in ("open", "high", "low", "close", "volume", "quote_volume",
                                                 "taker_buy_volume", "taker_buy_quote_volume")],
         pl.col("count").cast(pl.Int64).alias("trades"),
     ).with_columns(pl.col("close_ts").alias("available_ts"))
@@ -75,12 +75,12 @@ def parse_metrics(raw: bytes) -> pl.DataFrame:
     return df.select(
         ts.alias("event_ts"),
         (ts + 300_000).alias("available_ts"),
-        pl.col("sum_open_interest").cast(pl.Float64).alias("oi_base"),
-        pl.col("sum_open_interest_value").cast(pl.Float64).alias("oi_usd"),
-        pl.col("count_toptrader_long_short_ratio").cast(pl.Float64).alias("top_ls_ratio_accounts"),
-        pl.col("sum_toptrader_long_short_ratio").cast(pl.Float64).alias("top_ls_ratio_positions"),
-        pl.col("count_long_short_ratio").cast(pl.Float64).alias("global_ls_ratio"),
-        pl.col("sum_taker_long_short_vol_ratio").cast(pl.Float64).alias("taker_buy_sell_ratio"),
+        pl.col("sum_open_interest").cast(pl.Float64, strict=False).alias("oi_base"),
+        pl.col("sum_open_interest_value").cast(pl.Float64, strict=False).alias("oi_usd"),
+        pl.col("count_toptrader_long_short_ratio").cast(pl.Float64, strict=False).alias("top_ls_ratio_accounts"),
+        pl.col("sum_toptrader_long_short_ratio").cast(pl.Float64, strict=False).alias("top_ls_ratio_positions"),
+        pl.col("count_long_short_ratio").cast(pl.Float64, strict=False).alias("global_ls_ratio"),
+        pl.col("sum_taker_long_short_vol_ratio").cast(pl.Float64, strict=False).alias("taker_buy_sell_ratio"),
     )
 
 
@@ -90,7 +90,7 @@ def parse_funding(raw: bytes) -> pl.DataFrame:
     return df.select(
         ts.alias("event_ts"),
         ts.alias("available_ts"),  # settled rate is known at settlement time
-        pl.col("last_funding_rate").cast(pl.Float64).alias("funding_rate"),
+        pl.col("last_funding_rate").cast(pl.Float64, strict=False).alias("funding_rate"),
         pl.col("funding_interval_hours").cast(pl.Int64).alias("interval_hours"),
         pl.lit(True).alias("is_settled"),
     )
@@ -108,6 +108,7 @@ class BinanceArchive:
         self.verify = verify_checksum
         self.missing: list[str] = []
         self.checksum_failures: list[str] = []
+        self.parse_failures: list[str] = []
 
     async def close(self) -> None:
         await self.client.aclose()
@@ -144,7 +145,14 @@ class BinanceArchive:
 
     async def _gather(self, rels: list[str], parser) -> pl.DataFrame:
         raws = await asyncio.gather(*(self.fetch(r) for r in rels))
-        frames = [parser(r) for r in raws if r]
+        frames = []
+        for rel, raw in zip(rels, raws, strict=True):
+            if not raw:
+                continue
+            try:
+                frames.append(parser(raw))
+            except Exception as e:  # one malformed file must not sink the whole backfill
+                self.parse_failures.append(f"{rel}: {type(e).__name__}: {str(e)[:120]}")
         return pl.concat(frames, how="diagonal_relaxed") if frames else pl.DataFrame()
 
     async def _monthly_with_daily_fallback(self, prefix: str, symbol: str, interval: str, start: date, end: date,

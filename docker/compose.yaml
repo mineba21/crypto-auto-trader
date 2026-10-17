@@ -1,0 +1,20 @@
+# Separate processes: collector, paper trader, dashboard. LIVE is intentionally not defined here;
+# add it only after docs/LIVE_RUNBOOK.md is completed.
+services:
+  collector:
+    build: {context: .., dockerfile: docker/Dockerfile}
+    command: ["collect-live", "--duration", "86400"]
+    restart: unless-stopped
+    volumes: ["../data:/app/data", "../logs:/app/logs"]
+  paper:
+    build: {context: .., dockerfile: docker/Dockerfile}
+    command: ["paper", "--strategy", "A2_sweep_choch"]
+    restart: unless-stopped
+    depends_on: [collector]
+    volumes: ["../data:/app/data"]
+  dashboard:
+    build: {context: .., dockerfile: docker/Dockerfile}
+    command: ["dashboard", "--host", "0.0.0.0", "--port", "8501"]
+    restart: unless-stopped
+    ports: ["127.0.0.1:8501:8501"]
+    volumes: ["../data:/app/data"]  # SQLite WAL readers need write access to -shm

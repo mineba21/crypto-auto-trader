@@ -167,6 +167,7 @@ async def collect_binance_archive(store: ParquetStore, symbols: list[str], start
         summary["_missing_files"] = len(arc.missing)
         summary["_missing_sample"] = arc.missing[:20]
         summary["_checksum_failures"] = arc.checksum_failures
+        summary["_parse_failures"] = arc.parse_failures
         await arc.close()
     return summary
 

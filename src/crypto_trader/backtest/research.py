@@ -32,8 +32,8 @@ from crypto_trader.backtest.validation import (
     walk_forward,
 )
 from crypto_trader.core.config import ROOT, Settings, load_settings
-from crypto_trader.core.timeutils import INTERVAL_MS, parse_utc
-from crypto_trader.features.derivatives import add_derivative_features
+from crypto_trader.core.timeutils import parse_utc
+from crypto_trader.features.derivatives import asof_align
 from crypto_trader.storage.parquet_store import ParquetStore
 from crypto_trader.strategies.library import Combined, DerivConfirm, FlowConfirm, build
 
@@ -93,6 +93,10 @@ FLOW_SPECS = [
 ]
 
 
+DERIV_COLS = ["oi_chg_4h", "oi_chg_24h", "oi_pctile_30d", "oi_chg_24h_pctile", "funding_z", "premium_z", "fut_taker_buy_frac",
+              "d_funding_rate", "d_oi_usd"]
+
+
 # ------------------------------------------------------------- workers
 _CACHE: dict = {}
 
@@ -106,8 +110,11 @@ def _frame(store_root: str, market: str, interval: str, fut: str | None, kind: s
         else:
             tb, _ = load_trade_bars(store, market, interval)
             if not tb.is_empty() and fut:
-                tb = add_derivative_features(tb, store.read("metrics", "binance", fut), store.read("funding", "binance", fut),
-                                             pl.DataFrame(), pl.DataFrame(), INTERVAL_MS[interval])
+                # derivatives features are computed on the hourly frame (enough history for z-scores/percentiles)
+                # and attached to 5m bars as-of the hourly bar close -> still causal
+                hourly = _frame(store_root, market, "1h", fut, "bars")
+                cols = [c for c in DERIV_COLS if c in hourly.columns]
+                tb = asof_align(tb, hourly.select(pl.col("close_ts").alias("available_ts"), *cols), cols, "")
             _CACHE[key] = tb
     return _CACHE[key]
 

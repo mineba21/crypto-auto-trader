@@ -112,3 +112,38 @@ def test_registry_complete():
     for k in ("A1_sweep_reversal", "A2_sweep_choch", "A3_sweep_fvg", "B1_short_squeeze", "B2_liq_reversal",
               "B3_crowding_filter", "C1_cvd_breakout", "C2_cvd_divergence", "C3_absorption", "C4_obi_flow"):
         assert k in REGISTRY
+
+
+def _flow_frame(n=1500, seed=4):
+    import polars as pl
+
+    rng = np.random.default_rng(seed)
+    df = make_bars(random_walk_local(n, seed), step_ms=300_000)
+    delta = rng.normal(0, 1, n)
+    obi = rng.uniform(-1, 1, n)
+    return df.with_columns(pl.Series("delta", delta), pl.Series("cvd", np.cumsum(delta)), pl.Series("valid", np.ones(n, bool)),
+                           pl.Series("obi", obi), pl.Series("obi_valid", np.ones(n, bool)),
+                           pl.Series("spread_bps", np.full(n, 2.0)),
+                           pl.Series("oi_chg_4h", rng.normal(0.01, 0.01, n)), pl.Series("funding_z", rng.normal(0, 1, n)),
+                           pl.Series("oi_chg_24h_pctile", rng.uniform(0, 1, n)))
+
+
+def random_walk_local(n, seed):
+    return 1e8 * np.exp(np.cumsum(np.random.default_rng(seed).normal(0, 0.003, n)))
+
+
+@pytest.mark.parametrize("name", ["C1_cvd_breakout", "C2_cvd_divergence", "C3_absorption", "C4_obi_flow"])
+def test_orderflow_strategies_run_and_are_causal(name, settings):
+    df = _flow_frame()
+    r = run_backtest(build(name), df, "KRW-BTC", "5m", settings, 0.003)
+    assert r.status == "OK"
+    assert lookahead_audit(lambda: build(name), df, n_points=8)["status"] == "PASS"
+
+
+def test_combined_modes_run(settings):
+    from crypto_trader.strategies.library import Combined, DerivConfirm, FlowConfirm
+    df = _flow_frame()
+    for mode in ("and", "filter", "score"):
+        s = Combined(build("A2_sweep_choch"), [FlowConfirm(), DerivConfirm(), build("B3_crowding_filter")], f"combo-{mode}",
+                     mode=mode)
+        assert run_backtest(s, df, "KRW-BTC", "5m", settings, 0.003).status == "OK"
