@@ -15,6 +15,7 @@ import json
 import logging
 import time
 import uuid
+from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
@@ -69,7 +70,9 @@ class UpbitWsCollector:
         self.on_trade, self.on_orderbook = on_trade, on_orderbook
         self.url = url
         self.health = StreamHealth()
-        self.last_seq: dict[str, int] = {}
+        self.last_seq: dict[str, int] = {}  # highest sequential_id seen (gap detection)
+        self.seen: dict[str, deque] = {}  # recent ids: fills of one order can arrive out of id order
+        self._seen_set: dict[str, set] = {}
         self.last_trade_ts: dict[str, int] = {}
         self.last_ob_ts: dict[str, int] = {}
         self.sinks = {}
@@ -108,13 +111,18 @@ class UpbitWsCollector:
         log.warning("gap %s %s %s-%s %s", symbol, stream, start_ms, end_ms, reason)
 
     async def handle_trade(self, t: Trade) -> None:
-        last = self.last_seq.get(t.symbol)
-        if last is not None and t.seq is not None and t.seq <= last:
-            return  # duplicate (e.g. replayed by backfill)
+        if t.seq is not None:
+            seen = self.seen.setdefault(t.symbol, deque(maxlen=20_000))
+            if t.seq in self._seen_set.setdefault(t.symbol, set()):
+                return  # duplicate (e.g. replayed by backfill)
+            if len(seen) == seen.maxlen:
+                self._seen_set[t.symbol].discard(seen[0])
+            seen.append(t.seq)
+            self._seen_set[t.symbol].add(t.seq)
         if t.event_ts < self.last_trade_ts.get(t.symbol, 0):
             self.health.out_of_order += 1
         if t.seq is not None:
-            self.last_seq[t.symbol] = t.seq
+            self.last_seq[t.symbol] = max(t.seq, self.last_seq.get(t.symbol, 0))
         self.last_trade_ts[t.symbol] = max(t.event_ts, self.last_trade_ts.get(t.symbol, 0))
         if "trades" in self.sinks:
             self.sinks["trades"].add(t.symbol, trade_row(t), time.time())

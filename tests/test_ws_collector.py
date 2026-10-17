@@ -54,3 +54,11 @@ def test_reconnect_backfill_replays_and_records_unrecoverable_gap(tmp_path):
     asyncio.run(c2.handle_message(msg(1, 10)))
     asyncio.run(c2.backfill_trades(disconnected_at=15))
     assert c2.health.gaps[0]["stream"] == "trades"
+
+
+def test_out_of_order_ids_within_same_ms_are_kept():
+    got = []
+    c = UpbitWsCollector(["KRW-BTC"], None, rest=FakeRest([]), on_trade=got.append)
+    for m in (msg(1001, 10), msg(1000, 10), msg(1001, 10)):
+        asyncio.run(c.handle_message(m))
+    assert sorted(t.seq for t in got) == [1000, 1001] and c.last_seq["KRW-BTC"] == 1001
