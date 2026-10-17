@@ -103,3 +103,12 @@ def test_market_data_guard(settings):
 def test_allocation_cannot_exceed_trading_capital(settings):
     with pytest.raises(ValueError):
         rm(settings, 5_000_000)
+
+
+def test_existing_open_risk_reduces_new_budget(settings):
+    r = rm(settings, 300_000, cost=0.0)  # daily limit 9,000; per trade 4,500
+    held = {"KRW-ETH": Position("KRW-ETH", "t", volume=1.0, avg_price=100_000, stop_price=94_000)}  # 6,000 at risk
+    d = r.check_entry(sig(95.0), 0, 100.0, 300_000, 300_000, held, 0)
+    assert d.ok and d.risk_krw == pytest.approx(3_000)  # 9,000 - 6,000
+    held["KRW-XRP"] = Position("KRW-XRP", "t", volume=1.0, avg_price=10_000, stop_price=7_000)  # +3,000
+    assert "no risk budget" in r.check_entry(sig(95.0), 0, 100.0, 300_000, 300_000, held, 0).reason

@@ -3,7 +3,8 @@
 Per-trade risk budget  = min(per_trade_risk_cap_krw, allocation_equity * per_trade_risk_pct) * size_scale
 Daily loss limit       = min(daily_loss_cap_krw,  allocation_equity_at_day_start * daily_loss_pct)   (Asia/Seoul day)
 
-Position size solves: qty * (entry - stop) + qty * entry * round_trip_cost <= risk budget, then is capped by
+The budget is further capped so that (today's realised loss + risk to stops of open positions + pending orders + this
+trade) cannot exceed the daily loss limit. Position size solves: qty * (entry - stop) + qty * entry * round_trip_cost <= risk budget, then is capped by
 available cash, the exposure limit (incl. open orders) and the trading-capital ceiling. Loss limits are *planned*
 limits: gaps, failed fills or exchange outages can exceed them, which is why stops are also sized with stress costs.
 No martingale, no averaging down, no leverage: a second entry on an open symbol is rejected.
@@ -106,7 +107,14 @@ class RiskManager:
         recent = [t for t in self.state.order_times if ts - t < 60_000]
         if len(recent) >= self.r.max_orders_per_minute:
             return SizeDecision(False, reason="order rate limit")
-        budget = self.per_trade_risk(equity)
+        # Existing risk: open positions to their stops (+exit cost) and pending buys (assumed to use a full budget).
+        open_risk = sum(max(0.0, p.volume * ((p.avg_price - (p.stop_price or 0.0)) + p.avg_price * self.rt_cost / 2))
+                        for p in positions.values() if p.is_open)
+        pending_risk = self.per_trade_risk(equity) if open_order_krw > 0 else 0.0
+        daily_room = self.daily_loss_limit() + min(0.0, self.daily_pnl(equity)) - open_risk - pending_risk
+        budget = min(self.per_trade_risk(equity), daily_room)
+        if budget <= 0:
+            return SizeDecision(False, reason=f"no risk budget left today (open risk {open_risk:,.0f} KRW)")
         per_unit = (entry_price - sig.stop_price) + entry_price * self.rt_cost
         qty = budget / per_unit
         notional = qty * entry_price

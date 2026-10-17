@@ -20,6 +20,14 @@ from crypto_trader.storage.parquet_store import ParquetStore
 _TICKER_CACHE: dict = {"ts": 0, "data": []}
 
 
+def _okx_spot(base: str) -> float | None:
+    try:
+        r = httpx.get("https://www.okx.com/api/v5/market/ticker", params={"instId": f"{base}-USDT"}, timeout=5)
+        return float(r.json()["data"][0]["last"])
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _ticker(markets: list[str]) -> list[dict]:
     if time.time() - _TICKER_CACHE["ts"] < 5:
         return _TICKER_CACHE["data"]
@@ -27,6 +35,12 @@ def _ticker(markets: list[str]) -> list[dict]:
         r = httpx.get("https://api.upbit.com/v1/ticker", params={"markets": ",".join(markets)}, timeout=5)
         data = [{"market": x["market"], "price": x["trade_price"], "change": x["signed_change_rate"],
                  "vol24h_krw": x["acc_trade_price_24h"], "ts": x["timestamp"]} for x in r.json()]
+        krw_usdt = next((d["price"] for d in data if d["market"] == "KRW-USDT"), None)
+        for d in data:
+            base = d["market"].split("-", 1)[1]
+            if krw_usdt and base != "USDT":
+                g = _okx_spot(base)
+                d["usdt_spread"] = d["price"] / (g * krw_usdt) - 1 if g else None
     except Exception as e:  # noqa: BLE001
         data = [{"error": str(e)}]
     _TICKER_CACHE.update(ts=time.time(), data=data)
@@ -77,6 +91,29 @@ def market_snapshot(settings: Settings, store: ParquetStore) -> dict:
     return out
 
 
+def strategy_snapshot(settings: Settings, store: ParquetStore) -> dict:
+    """Past performance from the latest backtest report JSON + today's regime label (same rule as the report)."""
+    import json
+
+    from crypto_trader.backtest.dataset import load_upbit_bars
+    from crypto_trader.backtest.validation import regime_labels
+    from crypto_trader.core.config import ROOT
+
+    out: dict = {"rows": [], "regime": None, "generated": None}
+    rep = ROOT / "reports" / "backtest_report.json"
+    if rep.exists():
+        d = json.loads(rep.read_text())
+        out["generated"] = d["meta"]["generated_at_utc"][:16] + "Z"
+        out["rows"] = sorted([{k: r.get(k) for k in ("strategy", "symbol", "trades", "net_return", "mdd", "expectancy_r")}
+                              for r in d["summary"] if r.get("cost_name") == "base" and r.get("status") == "OK"
+                              and r.get("bar") == d["meta"]["interval"]], key=lambda r: -(r["expectancy_r"] or -9))[:12]
+    daily = load_upbit_bars(store, "KRW-BTC", "1d")
+    if not daily.is_empty():
+        lab = regime_labels(daily)
+        out["regime"] = str(lab.iloc[-1]) if len(lab) else None
+    return out
+
+
 def account_snapshot(settings: Settings, mode: str) -> dict:
     p = settings.path(settings.ops_db) if mode == settings.mode else settings.path(settings.ops_db).with_name(f"ops_{mode.lower()}.sqlite")
     if not Path(p).exists():
@@ -119,25 +156,28 @@ td:first-child,th:first-child{text-align:left}th{color:var(--t2);font-weight:600
 <div class="card"><h2>해외 선물 (OKX, 필터 전용)</h2><div id="deriv"></div></div></div>
 <div class="row"><div class="card"><h2>자산 / 위험 한도</h2><div id="acct"></div></div>
 <div class="card"><h2>포지션</h2><div id="pos"></div></div><div class="card"><h2>미체결 주문</h2><div id="orders"></div></div></div>
+<div class="row"><div class="card"><h2>전략 과거 성과 (백테스트, 기본 비용) · 시장 국면</h2><div id="strat"></div></div></div>
 <div class="row"><div class="card"><h2>최근 신호 (차단 사유 포함)</h2><div id="sig"></div></div>
 <div class="card"><h2>최근 체결</h2><div id="fills"></div></div></div>
 <div class="row"><div class="card"><h2>시스템 이벤트</h2><div id="events"></div></div>
 <div class="card"><h2>컴포넌트 / WS 상태</h2><div id="hb"></div></div></div>
-<p class="muted">읽기 전용 대시보드 · 시각은 KST · 5초마다 갱신</p></main><script>
+<p class="muted">읽기 전용 대시보드 · 시각은 KST · 5초마다 갱신 · USDT 상대차 = Upbit KRW가 / (OKX USDT가 × Upbit KRW-USDT) − 1 (외환 김치프리미엄 아님)</p></main><script>
 const q=new URLSearchParams(location.search);const MODE=q.get('mode')||'%MODE%';
 function kst(ms){return ms?new Date(ms).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}):'-'}
 function n(v,d=0){return v==null?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d})}
 function tbl(rows,cols){if(!rows||!rows.length)return'<span class="muted">(없음)</span>';
  return '<table><tr>'+cols.map(c=>'<th>'+c[1]+'</th>').join('')+'</tr>'+rows.map(r=>'<tr>'+cols.map(c=>'<td>'+(c[2]?c[2](r[c[0]],r):(r[c[0]]??'-'))+'</td>').join('')+'</tr>').join('')+'</table>'}
 async function tick(){
- const [m,a]=await Promise.all([fetch('api/market').then(r=>r.json()),fetch('api/account?mode='+MODE).then(r=>r.json())]);
+ const [m,a,st]=await Promise.all([fetch('api/market').then(r=>r.json()),fetch('api/account?mode='+MODE).then(r=>r.json()),fetch('api/strategy').then(r=>r.json())]);
  document.getElementById('mode').textContent=MODE;
  const ks=a.kill_switch||{};document.getElementById('status').innerHTML=
   '<span class="pill">MODE '+MODE+'</span><span class="pill '+(ks.active?'bad':'ok')+'">Kill switch '+(ks.active?'ACTIVE: '+ks.reasons.map(r=>r.code).join(','):'off')+'</span>'
   +'<span class="pill '+((a.ws_health||{}).connected?'ok':'bad')+'">Upbit WS</span>'+(a.available?'':'<span class="pill bad">ops DB 없음</span>');
- document.getElementById('tickers').innerHTML=tbl(m.tickers,[['market','market'],['price','price',v=>n(v,2)],['change','24h',v=>v==null?'-':(v*100).toFixed(2)+'%'],['vol24h_krw','24h KRW',v=>n(v/1e8,1)+'억'],['ts','time',kst]]);
+ document.getElementById('tickers').innerHTML=tbl(m.tickers,[['market','market'],['price','price',v=>n(v,2)],['change','24h',v=>v==null?'-':(v*100).toFixed(2)+'%'],['vol24h_krw','24h KRW',v=>v==null?'-':n(v/1e8,1)+'억'],['usdt_spread','USDT 상대차',v=>v==null?'-':(v*100).toFixed(2)+'%'],['ts','time',kst]]);
+ document.getElementById('strat').innerHTML='<p class="muted">현재 국면(KRW-BTC 일봉): <b>'+(st.regime||'-')+'</b> · 백테스트 '+(st.generated||'없음')+'</p>'+
+  tbl(st.rows,[['strategy','strategy'],['symbol','market'],['trades','trades'],['net_return','net',v=>v==null?'-':(v*100).toFixed(1)+'%'],['mdd','MDD',v=>v==null?'-':(v*100).toFixed(1)+'%'],['expectancy_r','E[R]',v=>v==null?'-':v.toFixed(3)]]);
  document.getElementById('flow').innerHTML=tbl(m.flow,[['market','market'],['trades_3h','trades 3h'],['cvd_3h','CVD 3h',v=>n(v,3)],['delta_15m','Δ15m',v=>n(v,3)],['obi5','OBI5',v=>v==null?'-':v.toFixed(2)],['spread_bps','spread bp',v=>n(v,1)],['last_trade','last']]);
- document.getElementById('deriv').innerHTML=tbl(m.derivatives,[['symbol','inst'],['oi_usd','OI USD',v=>n(v/1e6,1)+'M'],['funding_est','funding(est)',v=>v==null?'-':(v*100).toFixed(4)+'%'],['long_liq_usd_24h','long liq 24h',v=>n(v/1e3,0)+'k'],['short_liq_usd_24h','short liq 24h',v=>n(v/1e3,0)+'k'],['oi_ts','at']]);
+ document.getElementById('deriv').innerHTML=tbl(m.derivatives,[['symbol','inst'],['oi_usd','OI USD',v=>v==null?'-':n(v/1e6,1)+'M'],['funding_est','funding(est)',v=>v==null?'-':(v*100).toFixed(4)+'%'],['long_liq_usd_24h','long liq 24h',v=>v==null?'-':n(v/1e3,0)+'k'],['short_liq_usd_24h','short liq 24h',v=>v==null?'-':n(v/1e3,0)+'k'],['oi_ts','at']]);
  const pa=a.paper_account||{},rs=a.risk_state||{};
  document.getElementById('acct').innerHTML=tbl([{k:'평가금액',v:n((a.equity||{}).equity_krw)},{k:'KRW',v:n(pa.cash??(a.equity||{}).cash_krw)},{k:'실현손익',v:n((a.equity||{}).realized_pnl)},{k:'미실현손익',v:n((a.equity||{}).unrealized_pnl)},{k:'일간 손실 한도',v:n(rs.daily_loss_limit)},{k:'거래당 위험',v:n(rs.per_trade_risk)},{k:'연속 손실',v:rs.consecutive_losses??'-'}],[['k',''],['v','']]);
  document.getElementById('pos').innerHTML=tbl(a.positions,[['symbol','symbol'],['volume','qty',v=>n(v,6)],['avg_price','avg',v=>n(v,2)],['stop_price','stop',v=>n(v,2)],['take_profit','target',v=>n(v,2)],['strategy','strategy']]);
@@ -172,6 +212,10 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/api/market")
     def market() -> JSONResponse:
         return JSONResponse(_clean(market_snapshot(settings, store)))
+
+    @app.get("/api/strategy")
+    def strategy() -> JSONResponse:
+        return JSONResponse(_clean(strategy_snapshot(settings, store)))
 
     @app.get("/api/account")
     def account(mode: str = str(settings.mode)) -> JSONResponse:
