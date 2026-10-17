@@ -59,7 +59,7 @@ def build_quality_report(store: ParquetStore, settings: Settings, out: Path) -> 
                 "'missing' 은 수집 실패가 아니라 무체결일 수 있으며, 채워 넣지 않습니다. 대형 공백(점검 등)은 largest gaps 에 표시.</p>")
     body.append(table(rows, [("exchange", "exchange", "text"), ("symbol", "symbol", "text"), ("interval", "iv", "text"),
                              ("rows", "rows", "num"), ("first", "first", "text"), ("last", "last", "text"),
-                             ("missing", "missing", "num"), ("missing_pct", "missing %", "pct"), ("gap_events", "gaps", "num"),
+                             ("missing", "missing", "num"), ("missing_pct", "missing %", "pctn"), ("gap_events", "gaps", "num"),
                              ("duplicates", "dups", "num"), ("misaligned", "misaligned", "num"), ("bad_ohlc", "bad OHLC", "num"),
                              ("zero_volume", "zero vol", "num"), ("return_outliers_8sd", "outliers 8σ", "num"),
                              ("largest", "largest gaps (start +bars)", "text")]))
@@ -77,7 +77,7 @@ def build_quality_report(store: ParquetStore, settings: Settings, out: Path) -> 
                 "Funding 주기는 심볼·시기에 따라 8h 외 4h 등으로 바뀔 수 있어 irregular 로 집계됩니다. 확정 funding 과 실시간 추정치(okx_estimate)는 별도 시리즈입니다.</p>")
     body.append(table(der, [("series", "series", "text"), ("symbol", "symbol", "text"), ("rows", "rows", "num"),
                             ("first", "first", "text"), ("last", "last", "text"), ("missing", "missing", "num"),
-                            ("missing_pct", "missing %", "pct"), ("gap_events", "gaps", "num"),
+                            ("missing_pct", "missing %", "pctn"), ("gap_events", "gaps", "num"),
                             ("irregular_steps", "irregular", "num")]))
 
     live = []

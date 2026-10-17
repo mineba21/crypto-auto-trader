@@ -85,6 +85,8 @@ def fmt(v, kind: str = "num") -> str:
         if kind == "pct":
             cls = "pos" if v > 0 else "neg" if v < 0 else ""
             return f"<span class='{cls}'>{v * 100:,.1f}%</span>"
+        if kind == "pctn":  # neutral percentage (no good/bad colouring)
+            return f"{v * 100:,.1f}%"
         if kind == "krw":
             cls = "pos" if v > 0 else "neg" if v < 0 else ""
             return f"<span class='{cls}'>{v:,.0f}</span>"
