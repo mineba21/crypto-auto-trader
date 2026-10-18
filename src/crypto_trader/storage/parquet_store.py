@@ -171,6 +171,37 @@ class ParquetStore:
             rows.append({**parts, "file": str(f), "bytes": f.stat().st_size})
         return rows
 
+    # ---------------------------------------------------------------- compact
+    def compact(self, before_date: str, kinds: list[str] | None = None, min_files: int = 2) -> dict:
+        """Merge the many small part files of closed date partitions (date < ``before_date``) into one file each.
+
+        Live sinks write a part file every flush; over weeks that is hundreds of thousands of files. Only partitions
+        that no writer touches any more are compacted, so this is safe to run while collectors are live.
+        """
+        out = {"partitions": 0, "files_before": 0, "rows": 0}
+        if not self.market.exists():
+            return out
+        for d in sorted(self.market.glob("kind=*/exchange=*/symbol=*/date=*")):
+            kind = d.parts[-4].removeprefix("kind=")
+            if kinds and kind not in kinds:
+                continue
+            if d.name.removeprefix("date=") >= before_date:
+                continue
+            files = [f for f in d.glob("*.parquet") if not f.name.startswith(".")]
+            if len(files) < min_files:
+                continue
+            df = pl.concat([pl.read_parquet(f) for f in files], how="diagonal_relaxed")
+            df = self._dedupe(kind, df)
+            ts_col = "open_ts" if "open_ts" in df.columns else "event_ts"
+            self._replace_partition(d, df.sort(ts_col))
+            out["partitions"] += 1
+            out["files_before"] += len(files)
+            out["rows"] += df.height
+        return out
+
+    def file_count(self) -> int:
+        return sum(1 for f in self.market.rglob("*.parquet") if not f.name.startswith(".")) if self.market.exists() else 0
+
     # --------------------------------------------------------------- validate
     def validate(self, repair: bool = True, compact: bool = False) -> ValidationReport:
         rep = ValidationReport()

@@ -26,7 +26,15 @@ uv run cat dashboard                               # http://127.0.0.1:8501
 uv run cat kill-switch status --mode PAPER
 ```
 
-Docker: `docker compose -f docker/compose.yaml up -d` 로 collector, paper, dashboard 를 띄웁니다 (LIVE 서비스는 정의하지 않음).
+**4주 PAPER 무인 운영 (Mac): `docs/MAC_SETUP.md`** — `docker compose -f docker/compose.yaml up -d` 로
+collector(무기한 수집 + 일 단위 압축), paper(9~10개 모의 인스턴스), dashboard 를 띄웁니다. LIVE 서비스는 정의하지 않았습니다.
+
+```bash
+uv run cat paper-fleet                 # config 의 paper_instances 전부 (실주문 없음)
+uv run cat paper-report --days 7       # 모의매매 vs 백테스트: 가동률·신호 일치·슬리피지·공백
+uv run cat notify-test                 # 텔레그램/헬스체크 설정 확인 (키 이름만 출력)
+uv run cat compact                     # 지난 날짜 파티션의 작은 parquet 파일 병합
+```
 
 ## 구성
 

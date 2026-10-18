@@ -1,20 +1,31 @@
-# Separate processes: collector, paper trader, dashboard. LIVE is intentionally not defined here;
-# add it only after docs/LIVE_RUNBOOK.md is completed.
+# 4-week PAPER run: collector + paper fleet + dashboard. No real orders are possible from this file
+# (LIVE is intentionally not defined; see docs/LIVE_RUNBOOK.md).
+#   docker compose -f docker/compose.yaml up -d --build
+x-common: &common
+  build: {context: .., dockerfile: docker/Dockerfile}
+  restart: unless-stopped          # restarts after crashes, watchdog exits and Docker Desktop restarts
+  env_file: ../.env
+  stop_grace_period: 30s           # lets buffered market data flush on shutdown
+  logging:
+    driver: json-file
+    options: {max-size: "20m", max-file: "5"}   # log rotation: at most ~100 MB per service
+  volumes:
+    - ../data:/app/data            # parquet market data (visible on the Mac)
+    - ops:/app/data/ops            # SQLite (WAL) state lives on a Docker volume, not on the Mac file share
+    - ../reports:/app/reports
+
 services:
   collector:
-    build: {context: .., dockerfile: docker/Dockerfile}
-    command: ["collect-live", "--duration", "86400"]
-    restart: unless-stopped
-    volumes: ["../data:/app/data", "../logs:/app/logs"]
+    <<: *common
+    command: ["collect-live", "--duration", "0"]
   paper:
-    build: {context: .., dockerfile: docker/Dockerfile}
-    command: ["paper", "--strategy", "A2_sweep_choch"]
-    restart: unless-stopped
+    <<: *common
+    command: ["paper-fleet"]
     depends_on: [collector]
-    volumes: ["../data:/app/data"]
   dashboard:
-    build: {context: .., dockerfile: docker/Dockerfile}
+    <<: *common
     command: ["dashboard", "--host", "0.0.0.0", "--port", "8501"]
-    restart: unless-stopped
-    ports: ["127.0.0.1:8501:8501"]
-    volumes: ["../data:/app/data"]  # SQLite WAL readers need write access to -shm
+    ports: ["127.0.0.1:8501:8501"]   # reachable only from this Mac
+
+volumes:
+  ops: {}

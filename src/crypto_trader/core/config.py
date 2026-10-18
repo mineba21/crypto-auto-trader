@@ -70,6 +70,12 @@ class Settings(BaseModel):
     costs: CostConfig = Field(default_factory=CostConfig)
     live: LiveApprovalConfig = Field(default_factory=LiveApprovalConfig)
     strategy_allocation_krw: float = 300_000
+    # PAPER fleet: each (strategy, market) runs as an isolated virtual account of strategy_allocation_krw
+    paper_instances: list[dict] = Field(default_factory=lambda: [
+        {"strategy": st, "symbol": sym}
+        for st in ("A2_sweep_choch", "BASE_ema_trend", "BASE_donchian")
+        for sym in ("KRW-BTC", "KRW-ETH", "KRW-XRP")
+    ])
     config_version: str = ""
 
     def path(self, rel: str) -> Path:

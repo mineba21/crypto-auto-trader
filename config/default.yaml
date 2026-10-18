@@ -9,6 +9,19 @@ futures_symbols:   # Upbit market -> external USDT-M perpetual used only as a fi
   KRW-ETH: ETHUSDT
   KRW-XRP: XRPUSDT
 strategy_allocation_krw: 300000
+# PAPER fleet (uv run cat paper-fleet): each instance is an isolated virtual 300,000 KRW account.
+# B1 needs live Binance derivatives (checked with `cat probe`); it is skipped automatically if unavailable.
+paper_instances:
+  - {strategy: A2_sweep_choch, symbol: KRW-BTC}
+  - {strategy: A2_sweep_choch, symbol: KRW-ETH}
+  - {strategy: A2_sweep_choch, symbol: KRW-XRP}
+  - {strategy: BASE_ema_trend, symbol: KRW-BTC}
+  - {strategy: BASE_ema_trend, symbol: KRW-ETH}
+  - {strategy: BASE_ema_trend, symbol: KRW-XRP}
+  - {strategy: BASE_donchian, symbol: KRW-BTC}
+  - {strategy: BASE_donchian, symbol: KRW-ETH}
+  - {strategy: BASE_donchian, symbol: KRW-XRP}
+  - {strategy: B1_short_squeeze, symbol: KRW-BTC}
 capital:
   total_capital_krw: 10000000
   protected_external_krw: 7000000     # never auto-transferred to the exchange

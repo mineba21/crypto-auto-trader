@@ -219,26 +219,46 @@ async def poll_derivatives_snapshot(store: ParquetStore, binance_symbols: list[s
     return rows
 
 
-async def collect_live(store: ParquetStore, markets: list[str], binance_symbols: list[str], duration_s: float,
-                       poll_s: float = 60.0) -> dict:
-    """Live capture: Upbit trades+orderbook (WS), OKX liquidations (WS), OKX derivatives snapshots (REST poll)."""
-    ws = UpbitWsCollector(markets, store, flush_s=min(30.0, duration_s))
+async def collect_live(store: ParquetStore, markets: list[str], binance_symbols: list[str], duration_s: float | None,
+                       poll_s: float = 60.0, settings=None) -> dict:
+    """Live capture: Upbit trades+orderbook (WS), OKX liquidations (WS), OKX derivatives snapshots (REST poll).
+
+    ``duration_s=None`` runs until stopped (service mode) with watchdog, hourly compaction, disk alerts and pings.
+    """
+    ws = UpbitWsCollector(markets, store, flush_s=min(30.0, duration_s or 30.0))
     rest = okx.OkxRest()
     insts = [okx.swap_inst(s) for s in binance_symbols]
-    stats = {"okx_snapshot_rows": 0, "okx_errors": []}
+    stats: dict = {"okx_snapshot_rows": 0, "okx_errors": []}
+    deadline = time.time() + duration_s if duration_s else None
+
+    def alive() -> bool:
+        return deadline is None or time.time() < deadline
 
     async def poller():
-        end = time.time() + duration_s
-        while time.time() < end:
+        while alive():
             try:
                 stats["okx_snapshot_rows"] += await poll_derivatives_snapshot(store, binance_symbols, rest)
             except Exception as e:  # noqa: BLE001
-                stats["okx_errors"].append(str(e)[:200])
-            await asyncio.sleep(min(poll_s, max(0.0, end - time.time())))
+                stats["okx_errors"] = (stats["okx_errors"] + [str(e)[:200]])[-50:]
+            await asyncio.sleep(poll_s if deadline is None else min(poll_s, max(0.0, deadline - time.time())))
+
+    async def maintenance():
+        if settings is None:
+            return
+        from crypto_trader.ops.fleet_ops import CollectorOps
+
+        ops = CollectorOps(settings, store, ws, lambda: {k: s.rows_written for k, s in ws.sinks.items()})
+        ops.start()
+        try:
+            while alive():
+                await ops.tick(stats["okx_errors"])
+                await asyncio.sleep(10 if deadline is None else min(10, max(0.0, deadline - time.time())))
+        finally:
+            ops.stop()
 
     try:
         res = await asyncio.gather(ws.run(duration_s), okx.run_liquidations(insts, store, rest, duration_s), poller(),
-                                   return_exceptions=True)
+                                   maintenance(), return_exceptions=True)
     finally:
         await rest.close()
         await ws.rest.close()

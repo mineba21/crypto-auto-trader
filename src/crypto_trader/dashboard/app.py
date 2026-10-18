@@ -11,7 +11,6 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from crypto_trader.core.config import Settings
-from crypto_trader.core.models import Mode
 from crypto_trader.core.timeutils import fmt_kst, now_ms
 from crypto_trader.features.orderflow import orderbook_frame_obi
 from crypto_trader.storage.ops_db import OpsDB
@@ -115,18 +114,28 @@ def strategy_snapshot(settings: Settings, store: ParquetStore) -> dict:
 
 
 def account_snapshot(settings: Settings, mode: str) -> dict:
-    p = settings.path(settings.ops_db) if mode == settings.mode else settings.path(settings.ops_db).with_name(f"ops_{mode.lower()}.sqlite")
+    # LIVE has its own DB file; PAPER instances are namespaces ("PAPER:<strategy>:<market>") in the paper DB
+    p = settings.path(settings.ops_db) if not mode.startswith("LIVE") else settings.path("data/ops/ops_live.sqlite")
     if not Path(p).exists():
         return {"mode": mode, "available": False}
     db = OpsDB(p, mode)
     try:
         ks = db.get_kv("kill_switch", {"active": False, "reasons": []})
+        if mode.startswith("PAPER:"):  # the global PAPER switch applies to every instance
+            g = OpsDB(p, "PAPER")
+            gks = g.get_kv("kill_switch", {"active": False, "reasons": []})
+            if gks.get("active"):
+                ks = {"active": True, "reasons": ks.get("reasons", []) + gks.get("reasons", [])}
+            ws = g.get_kv("ws_health")
+            g.close()
+        else:
+            ws = db.get_kv("ws_health")
         orders = [o for o in db.load_orders(active_only=True)]
         eq = db.equity_curve(2000)
         return {
             "mode": mode, "available": True, "kill_switch": ks,
             "paper_account": db.get_kv("paper_account"), "risk_state": db.get_kv("risk_state"),
-            "ws_health": db.get_kv("ws_health"),
+            "ws_health": ws,
             "positions": [p.__dict__ for p in db.load_positions().values()],
             "open_orders": [{"coid": o.client_order_id, "symbol": o.request.symbol, "side": str(o.request.side),
                              "type": str(o.request.order_type), "state": str(o.state), "price": o.request.price,
@@ -150,7 +159,7 @@ table{border-collapse:collapse;width:100%}td,th{padding:3px 6px;border-bottom:1p
 td:first-child,th:first-child{text-align:left}th{color:var(--t2);font-weight:600}.ok::before{content:"● ";color:var(--good)}
 .bad::before{content:"● ";color:var(--crit)}.pill{display:inline-block;border:1px solid var(--b);border-radius:10px;padding:0 8px;margin-right:6px}
 .muted{color:var(--t2)}</style></head><body><main>
-<h1>Crypto Auto Trader <span class="muted" id="mode"></span></h1><div id="status"></div>
+<h1>Crypto Auto Trader <span class="muted" id="mode"></span></h1><div id="status"></div><div id="inst" style="margin:6px 0;line-height:2"></div>
 <div class="row"><div class="card"><h2>Upbit 시세</h2><div id="tickers"></div></div>
 <div class="card"><h2>Order flow (Upbit 체결/호가)</h2><div id="flow"></div></div>
 <div class="card"><h2>해외 선물 (OKX, 필터 전용)</h2><div id="deriv"></div></div></div>
@@ -162,12 +171,15 @@ td:first-child,th:first-child{text-align:left}th{color:var(--t2);font-weight:600
 <div class="row"><div class="card"><h2>시스템 이벤트</h2><div id="events"></div></div>
 <div class="card"><h2>컴포넌트 / WS 상태</h2><div id="hb"></div></div></div>
 <p class="muted">읽기 전용 대시보드 · 시각은 KST · 5초마다 갱신 · USDT 상대차 = Upbit KRW가 / (OKX USDT가 × Upbit KRW-USDT) − 1 (외환 김치프리미엄 아님)</p></main><script>
-const q=new URLSearchParams(location.search);const MODE=q.get('mode')||'%MODE%';
+const q=new URLSearchParams(location.search);let MODE=q.get('mode')||'';
 function kst(ms){return ms?new Date(ms).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}):'-'}
 function n(v,d=0){return v==null?'-':Number(v).toLocaleString(undefined,{maximumFractionDigits:d})}
 function tbl(rows,cols){if(!rows||!rows.length)return'<span class="muted">(없음)</span>';
  return '<table><tr>'+cols.map(c=>'<th>'+c[1]+'</th>').join('')+'</tr>'+rows.map(r=>'<tr>'+cols.map(c=>'<td>'+(c[2]?c[2](r[c[0]],r):(r[c[0]]??'-'))+'</td>').join('')+'</tr>').join('')+'</table>'}
 async function tick(){
+ const inst=await fetch('api/instances').then(r=>r.json());
+ if(!MODE)MODE=inst.length?inst[0].mode:'%MODE%';
+ document.getElementById('inst').innerHTML=inst.map(x=>'<a class="pill '+(x.kill?'bad':'ok')+'" href="?mode='+encodeURIComponent(x.mode)+'"'+(x.mode===MODE?' style="font-weight:700"':'')+'>'+x.mode.replace('PAPER:','')+(x.equity?' '+(x.equity/1000).toFixed(1)+'k':'')+(x.position?' ●':'')+'</a>').join(' ');
  const [m,a,st]=await Promise.all([fetch('api/market').then(r=>r.json()),fetch('api/account?mode='+MODE).then(r=>r.json()),fetch('api/strategy').then(r=>r.json())]);
  document.getElementById('mode').textContent=MODE;
  const ks=a.kill_switch||{};document.getElementById('status').innerHTML=
@@ -217,9 +229,28 @@ def create_app(settings: Settings) -> FastAPI:
     def strategy() -> JSONResponse:
         return JSONResponse(_clean(strategy_snapshot(settings, store)))
 
+    @app.get("/api/instances")
+    def instances() -> JSONResponse:
+        p = settings.path(settings.ops_db)
+        if not p.exists():
+            return JSONResponse([])
+        db = OpsDB(p, "PAPER")
+        try:
+            out = []
+            for m in db.modes("PAPER:"):
+                d = OpsDB(p, m)
+                eq = d.equity_curve(1)
+                ks = d.get_kv("kill_switch", {}) or {}
+                pos = d.load_positions()
+                out.append({"mode": m, "equity": eq[-1]["equity_krw"] if eq else None, "kill": bool(ks.get("active")),
+                            "position": bool(pos)})
+                d.close()
+            return JSONResponse(_clean(out))
+        finally:
+            db.close()
+
     @app.get("/api/account")
     def account(mode: str = str(settings.mode)) -> JSONResponse:
-        mode = Mode(mode.upper())
         return JSONResponse(_clean(account_snapshot(settings, str(mode))))
 
     return app

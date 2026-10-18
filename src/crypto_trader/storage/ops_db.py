@@ -276,5 +276,23 @@ class OpsDB:
         self._exec("INSERT OR REPLACE INTO heartbeats(component,ts,status,detail) VALUES(?,?,?,?)",
                    (component, now_ms(), status, detail))
 
+    def modes(self, prefix: str = "") -> list[str]:
+        """All mode namespaces present in this DB (e.g. PAPER:A2_sweep_choch:KRW-BTC)."""
+        rows = self._exec("SELECT DISTINCT mode FROM kv UNION SELECT DISTINCT mode FROM signals ORDER BY 1").fetchall()
+        return [r[0] for r in rows if r[0].startswith(prefix)]
+
+    def signals_between(self, start_ms: int, end_ms: int) -> list[dict]:
+        rows = self._exec("SELECT * FROM signals WHERE mode=? AND decision_ts>=? AND decision_ts<? ORDER BY id",
+                          (self.mode, start_ms, end_ms)).fetchall()
+        return [dict(r) for r in rows]
+
+    def fills_between(self, start_ms: int, end_ms: int) -> list[dict]:
+        rows = self._exec("SELECT * FROM fills WHERE mode=? AND ts>=? AND ts<? ORDER BY ts", (self.mode, start_ms, end_ms)).fetchall()
+        return [dict(r) for r in rows]
+
+    def equity_between(self, start_ms: int, end_ms: int) -> list[dict]:
+        rows = self._exec("SELECT * FROM equity WHERE mode=? AND ts>=? AND ts<? ORDER BY ts", (self.mode, start_ms, end_ms)).fetchall()
+        return [dict(r) for r in rows]
+
     def heartbeats(self) -> list[dict]:
         return [dict(r) for r in self._exec("SELECT * FROM heartbeats ORDER BY component").fetchall()]
