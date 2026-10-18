@@ -8,6 +8,24 @@
 | `paper` | 9개 모의매매 인스턴스(A2·EMA·Donchian × BTC·ETH·XRP)와 B1(Binance 접근 시)을 각각 가상 30만원으로 운영 |
 | `dashboard` | http://127.0.0.1:8501 (이 Mac 에서만 열림) |
 
+## 빠른 시작 (명령 하나)
+
+Docker Desktop 설치 후 터미널에서 실행합니다.
+```bash
+cd ~/Desktop/claude && git clone https://github.com/mineba21/crypto-auto-trader.git && cd crypto-auto-trader
+scripts/mac_start.sh
+```
+스크립트가 아래 순서로 처리합니다.
+1. Docker Desktop 을 확인합니다.
+2. 텔레그램 키를 가져옵니다 (기본 경로 `/Users/soohan/Desktop/claude/test1/myStockApp-scanner-vm/.env`).
+3. 전원 연결 시 잠자기를 끕니다 (비밀번호 1회).
+4. 이미지를 빌드합니다.
+5. 텔레그램 테스트 메시지를 보내고 거래소 접근을 확인합니다.
+6. Binance 가 열리면 B1 용 데이터를 받습니다.
+7. 서비스를 시작합니다.
+
+다시 실행해도 안전합니다(수집 데이터와 모의 계좌 상태는 유지). 아래는 각 단계의 상세 설명입니다.
+
 ## 1. 준비 (한 번만)
 
 1. **Docker Desktop for Mac** 을 설치합니다 (Apple Silicon / Intel 중 맞는 버전).
