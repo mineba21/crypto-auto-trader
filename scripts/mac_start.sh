@@ -10,12 +10,25 @@ TG_SRC="${1:-/Users/soohan/Desktop/claude/test1/myStockApp-scanner-vm/.env}"
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
 step "1/7 Docker"
+if [ ! -d /Applications/Docker.app ] && ! command -v docker >/dev/null 2>&1; then
+  echo "Docker Desktop is not installed."
+  echo "  Install: https://www.docker.com/products/docker-desktop/  (Apple chip / Intel chip: check  > About This Mac)"
+  echo "  or with Homebrew:  brew install --cask docker"
+  echo "Then open Docker once from Applications, accept the terms, wait for 'Engine running', and re-run this script."
+  exit 1
+fi
 if ! docker info >/dev/null 2>&1; then
   open -a Docker 2>/dev/null || true
-  echo "waiting for Docker Desktop to start..."
-  for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 2; done
+  echo "waiting for Docker Desktop to start (first launch can take a few minutes)..."
+  for _ in $(seq 1 150); do docker info >/dev/null 2>&1 && break; sleep 2; done
 fi
-docker info >/dev/null 2>&1 || { echo "Docker Desktop is not running. Install/start it and re-run."; exit 1; }
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker Desktop is installed but its engine is not running yet."
+  echo "  Open Docker from Applications, finish any first-run dialog (terms / password), wait until the"
+  echo "  whale icon in the menu bar says 'Docker Desktop is running', then re-run this script."
+  command -v docker >/dev/null 2>&1 || echo "  ('docker' command not on PATH: in Docker Desktop > Settings > Advanced choose 'System' install)"
+  exit 1
+fi
 
 step "2/7 .env (Telegram keys only; values are never printed)"
 [ -f .env ] || cp .env.example .env
