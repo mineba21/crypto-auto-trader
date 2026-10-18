@@ -44,7 +44,7 @@ Upbit KRW **현물 Long-only** 자동매매 시스템. 해외 선물(Binance/Byb
   적용 여부는 `docker compose -f docker/compose.yaml logs collector | grep "liquidation sources"` 로 확인합니다
   (`'binance_fapi': 'OK', 'bybit_v5': 'OK'` 가 보이면 적용된 것).
 - 운영 DB 는 Docker 볼륨 `docker_ops`(`/app/data/ops`) 에 있습니다. 시장 데이터는 Mac 의 `./data`.
-- 알림: 텔레그램(기존 myStockApp `.env` 에서 키 가져옴). healthchecks.io 는 **설정 여부 미확인**.
+- 알림: 텔레그램(기존 myStockApp `.env` 에서 키 가져옴). healthchecks.io 는 **아직 미설정 (운영자가 나중에 하기로 보류)**. 방법은 `docs/MAC_SETUP.md` §1-4.
 - 일정: 매일 09:00 KST 일일 요약, 월요일 09:10 KST 주간 `paper_report`, 4주 뒤 `paper-report --days 28` 로 합격 판정.
 
 ### 연구 결과 (2022-01 ~ 2026-10, 1h, 왕복 비용 0.30%) — `docs/PHASE_REPORT.md`
@@ -138,7 +138,7 @@ uv run cat kill-switch on|off|status --mode PAPER
    - 개발 클라우드(미국)에서는 두 소스가 차단돼 **실제 스트림으로는 검증하지 못했습니다.**
      검증은 공식 문서 기준 파서 테스트와 로컬 가짜 WS 서버 테스트(`tests/test_liquidations.py`)까지입니다.
 2. **[완료]** `docs/API_ACCESS.md` 에 한국 회선 probe 결과와 거래소별 청산 표기 차이를 반영했습니다.
-3. healthchecks.io 설정 여부를 운영자에게 확인합니다 (`HEALTHCHECK_URL_*`). 없으면 Mac 이 잠들어도 알림이 없습니다.
+3. healthchecks.io 는 운영자가 나중에 설정하기로 보류했습니다. 설정 전까지는 Mac 이 잠들어도 알림이 없습니다. 운영자가 요청하면 `docs/MAC_SETUP.md` §1-4 대로 안내하고, `notify-test` 에서 `ping ok` 두 줄을 확인합니다.
 4. Upbit 개인 주문 이벤트 WebSocket(myOrder)을 구현합니다 (LIVE 준비용, 현재 REST 조회·reconcile 로 대체).
 5. GitHub Actions CI (pytest + ruff).
 6. 4주 뒤:
