@@ -2,6 +2,7 @@
 
 다른 에이전트(Codex 등)나 사람이 이 프로젝트를 이어받을 때 읽는 문서입니다.
 기준 시점: **2026-10-18 (KST)**, `main` @ `a1e599d`. 상세 근거는 `docs/` 에 있습니다.
+**파일·데이터가 어디 있는지는 9절 "파일 위치"** 를 보세요.
 
 ---
 
@@ -109,10 +110,34 @@ uv run cat kill-switch on|off|status --mode PAPER
 
 ## 7. 다음 할 일 (우선순위)
 
-1. **[운영자 결정 대기] 청산 데이터 수집 확대.** 지금 collector 는 OKX 청산만 받습니다.
-   - Bybit `allLiquidation` 은 `collectors/bybit/ws.py::run_liquidations` 로 이미 구현돼 있으니, `jobs.collect_live` 에 연결만 하면 됩니다.
-   - Binance `!forceOrder@arr`(전체 시장 강제청산 WS)는 신규 구현이 필요합니다. 스키마는 `liquidations` kind, `side` 는 `long_liq`/`short_liq`, `notional_usd`.
-   - B2 원설계 검증용이며, 일찍 시작할수록 데이터가 많이 쌓입니다. 적용 = 운영자 Mac 에서 `git pull && scripts/mac_start.sh`.
+1. **[진행 승인됨, 미구현] 청산 데이터 수집 확대.** 지금 collector 는 OKX 청산만 받습니다.
+   과거 청산 데이터는 어디에도 없으므로 **4주를 기다리지 말고 지금 바로** 시작해야 합니다. 늦출수록 그만큼의 데이터가 영구히 없습니다.
+   - **Bybit** `allLiquidation.{symbol}`: `src/crypto_trader/collectors/bybit/ws.py::run_liquidations` 가 이미 있습니다.
+     `src/crypto_trader/collectors/jobs.py::collect_live` 의 `asyncio.gather(...)` 에 추가하면 됩니다.
+     - ⚠️ **방향 버그를 먼저 고칠 것.** 공식 문서(https://bybit-exchange.github.io/docs/v5/websocket/public/all-liquidation)에
+       *"When you receive a `Buy` update, this means that a long position has been liquidated"* 라고 돼 있습니다.
+       현재 `parse_liquidation` 은 `Buy → short_liq` 로 **반대로** 매핑합니다 → `Buy → long_liq`, `Sell → short_liq` 로 수정하세요.
+       `tests/test_parsing.py::test_liquidation_parsers_normalise_side_and_notional` 도 잘못된 기대값(`short_liq`)을 검증하고 있으니 함께 고칩니다.
+       (이 수집기는 아직 운영에 연결된 적이 없어서 잘못 저장된 데이터는 없습니다.)
+     - 500ms 주기 스냅샷입니다. 필드: `T` 시각, `s` 심볼, `S` 방향, `v` 수량, `p` 파산가격.
+   - **Binance** `wss://fstream.binance.com/ws/!forceOrder@arr` (신규 구현):
+     - 메시지 `{"e":"forceOrder","E":..,"o":{"s","S","q","p","ap","X","l","z","T"}}`.
+     - `o.S == "SELL"` → 롱 강제청산(`long_liq`), `"BUY"` → `short_liq`.
+     - notional = `o.ap × o.z`, 시각은 `o.T`.
+     - **심볼당 1000ms 안의 마지막 1건만** 푸시되므로 합계는 하한값(lower bound)입니다. 저장 시 `source="binance_ws"`.
+     - 모듈은 `src/crypto_trader/collectors/binance/liquidations.py`, 파서와 테스트를 같이 만듭니다.
+   - 공통:
+     - 스키마는 `liquidations` kind(`event_ts, received_ts, available_ts, symbol, side, price, qty, notional_usd, source`). OKX 구현(`collectors/okx/client.py::parse_liquidation`, `run_liquidations`)을 그대로 따릅니다.
+     - 저장 대상 심볼은 `settings.futures_symbols.values()` (BTCUSDT/ETHUSDT/XRPUSDT) 입니다.
+     - 시작할 때 REST 로 한 번 접근을 확인해 `AccessBlocked` 면 그 소스는 건너뜁니다(우회 금지).
+     - 재연결 구간은 `gaps` 로 기록합니다.
+   - 대시보드: `src/crypto_trader/dashboard/app.py::market_snapshot` 의 청산 합계가 지금은 OKX만 봅니다 → binance/bybit 도 합산합니다.
+   - 백테스트 연결(4주 뒤 B2 검증용):
+     - 청산을 1시간 버킷 `long_liq_usd` 로 집계하는 인과적 함수를 `features/derivatives.py` 에 추가합니다. 버킷은 닫힌 뒤에만 사용 가능합니다(`available_ts = bucket_end`).
+     - `backtest/dataset.py::load_research_frame` 에 as-of 로 붙입니다.
+     - `strategies/library.py::B2LiquidationReversal(require_liquidations=True)` 가 이 컬럼을 읽습니다.
+   - 실제 스트림 확인은 운영자 Mac 에서만 가능합니다(개발 클라우드는 미국이라 차단).
+     적용 = Mac 에서 `git pull && scripts/mac_start.sh`. 기존 데이터·모의 계좌 상태는 유지됩니다.
 2. `docs/API_ACCESS.md` 에 한국 회선 probe 결과(Binance fapi OK, Bybit OK)를 반영합니다.
 3. healthchecks.io 설정 여부를 운영자에게 확인합니다 (`HEALTHCHECK_URL_*`). 없으면 Mac 이 잠들어도 알림이 없습니다.
 4. Upbit 개인 주문 이벤트 WebSocket(myOrder)을 구현합니다 (LIVE 준비용, 현재 REST 조회·reconcile 로 대체).
@@ -129,3 +154,48 @@ uv run cat kill-switch on|off|status --mode PAPER
 - 운영 중인 Mac 서비스에 영향을 주는 변경(스키마, `config/default.yaml` 의 `paper_instances`, ops DB 키)은 **4주 실험의 연속성을 깨지 않도록** 하위호환을 유지합니다.
   인스턴스 mode 이름이 바뀌면 이력이 끊깁니다.
 - 운영자 선호: Python 엔지니어이고 LLM·이상감지에 관심이 많습니다. 설명은 한국어로 합니다.
+
+## 9. 파일 위치
+
+### 저장소
+| 무엇 | 위치 |
+|---|---|
+| GitHub | https://github.com/mineba21/crypto-auto-trader (기본 브랜치 `main`) |
+| 운영자 Mac 의 작업 폴더 | `~/Desktop/claude/crypto-auto-trader` (MAC_SETUP 안내 기준. 실제 경로는 운영자 확인) |
+| 개발용 클라우드 컨테이너 | `/home/user/crypto-auto-trader` — 임시 환경이라 세션이 끝나면 사라집니다. 기준은 항상 GitHub `main` 입니다 |
+
+### 운영자 Mac (저장소 폴더 기준 상대경로)
+| 무엇 | 위치 | 비고 |
+|---|---|---|
+| 비밀 설정 | `.env` | gitignore. 텔레그램·healthcheck 키. 형식은 `.env.example` |
+| 텔레그램 키 원본 | `/Users/soohan/Desktop/claude/test1/myStockApp-scanner-vm/.env` | `scripts/import_telegram_env.sh` 가 TELEGRAM 키만 복사. 다른 프로젝트 파일이므로 수정 금지 |
+| 시장 데이터 (Parquet) | `data/market/kind=<종류>/exchange=<거래소>/symbol=<심볼>/date=<YYYY-MM-DD>/*.parquet` | 종류: ohlcv, trades, orderbook, open_interest, funding, mark_price, liquidations, metrics, premium_index, gaps |
+| Binance 아카이브 캐시 | `data/cache/binance/` | data.binance.vision zip 원본 |
+| 손상 파일 격리 | `data/quarantine/` | `cat validate` 가 옮김 |
+| 운영 DB (SQLite WAL) | Docker 볼륨 `docker_ops` → 컨테이너 안 `/app/data/ops/` | `ops_paper.sqlite`(PAPER 인스턴스 10개 + 전역 `PAPER`), `ops_collector.sqlite`. Mac 의 `data/ops/` 는 볼륨에 가려져 쓰이지 않음 |
+| 리포트 | `reports/` | `paper_report_YYYYMMDD.html`(주간 자동), `probe_latest.txt`(mac_start 5단계), `backtest_report.html/.json`, `data_quality.html` |
+| 리포트 커밋본 | `reports/samples/` | 2026-10-17 백테스트·품질 리포트 사본 (git 추적) |
+| 서비스 로그 | `docker compose -f docker/compose.yaml logs <collector\|paper\|dashboard>` | json-file, 서비스당 20MB × 5개 회전 |
+| 대시보드 | http://127.0.0.1:8501 | Mac 안에서만 접근 |
+
+### 설정·실행 파일
+| 무엇 | 위치 |
+|---|---|
+| 기본 설정 (PAPER 인스턴스 목록 포함) | `config/default.yaml` |
+| LIVE 설정 예시 (사용 금지) | `config/live.example.yaml` — `config/live.yaml`, `config/live_approval.json` 은 존재하지 않아야 정상 |
+| Docker | `docker/Dockerfile`, `docker/compose.yaml` |
+| 스크립트 | `scripts/mac_start.sh`(원샷 시작), `scripts/import_telegram_env.sh`, `scripts/phase1_2.sh`(Phase 1–2 재현), `scripts/approve_live.py`(LIVE 승인 — 운영자 전용) |
+| 문서 | `docs/ARCHITECTURE.md`, `docs/API_ACCESS.md`, `docs/PHASE_REPORT.md`, `docs/MAC_SETUP.md`, `docs/LIVE_RUNBOOK.md`, `docs/generated/api_probe_results.json` |
+| 에이전트 지침 | `AGENTS.md`(요약 규칙), 이 파일 `HANDOFF.md` |
+
+### 7절 1번(청산 수집) 작업에 필요한 파일
+| 파일 | 할 일 |
+|---|---|
+| `src/crypto_trader/collectors/bybit/ws.py` | `parse_liquidation` 방향 수정 (Buy=롱 청산) |
+| `src/crypto_trader/collectors/binance/liquidations.py` | 신규: `!forceOrder@arr` 파서 + 수집 루프 |
+| `src/crypto_trader/collectors/okx/client.py` | 참고용 기존 구현 (`parse_liquidation`, `run_liquidations`) |
+| `src/crypto_trader/collectors/jobs.py` | `collect_live` 에 두 소스 연결 (접근 확인 후) |
+| `src/crypto_trader/dashboard/app.py` | `market_snapshot` 청산 합계에 binance/bybit 포함 |
+| `src/crypto_trader/features/derivatives.py`, `src/crypto_trader/backtest/dataset.py` | 1시간 `long_liq_usd` 집계와 as-of 연결 |
+| `tests/test_parsing.py` | Bybit 기대값 수정, Binance 파서 테스트 추가 |
+
