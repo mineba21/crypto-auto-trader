@@ -247,6 +247,7 @@ async def run_paper_fleet(settings: Settings, instances: list[tuple[str, str]], 
     for sess in skipped:
         status = sess.deriv_feed.status if sess.deriv_feed else "no futures mapping"
         sess.db.log_event("WARNING", "runner", f"instance skipped: derivatives feed {status}")
+        log.warning("instance skipped %s: derivatives feed %s", sess.db.mode, status)
         get_notifier().send(f"⚠️ {sess.core.strategy.label}/{sess.symbol} skipped: Binance derivatives {status}",
                             key=f"skip:{sess.db.mode}", min_interval_s=86_400)
     sessions = [s for s in sessions if s not in skipped]

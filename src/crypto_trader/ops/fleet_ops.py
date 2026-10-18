@@ -66,6 +66,7 @@ class FleetOps:
         self.watchdog.start()
         names = ", ".join(f"{s.core.strategy.label}/{s.symbol}" for s in self.sessions)
         feeds = ", ".join(f"{k}:{v.status}" for k, v in self.feeds.items()) or "none"
+        log.info("PAPER fleet started (%d instances): %s | derivatives: %s", len(self.sessions), names, feeds)
         self.notifier.send(f"▶️ PAPER fleet started ({len(self.sessions)} instances)\n{names}\nderivatives: {feeds}",
                            key="start", min_interval_s=60)
 
@@ -152,6 +153,7 @@ class CollectorOps:
 
     def start(self) -> None:
         self.watchdog.start()
+        log.info("collector started")
         self.notifier.send("▶️ collector started", key="collector-start", min_interval_s=60)
 
     def stop(self) -> None:

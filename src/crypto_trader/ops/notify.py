@@ -69,6 +69,7 @@ class Notifier:
             ok = False
         if ok:
             self.sent += 1
+            log.info("notify sent: %s", text.splitlines()[0][:120])
         else:
             self.failed += 1
         return ok
