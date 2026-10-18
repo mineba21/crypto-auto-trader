@@ -82,8 +82,12 @@ def market_snapshot(settings: Settings, store: ParquetStore) -> dict:
                 d.update(oi_usd=float(snap["oi_usd"][-1]), oi_ts=fmt_kst(int(snap["received_ts"][-1])))
         if not fr.is_empty():
             d.update(funding_est=float(fr["funding_rate"][-1]))
-        liq = _latest(store, "liquidations", "okx", inst, now_ms() - 86_400_000)
-        if not liq.is_empty():
+        # observed liquidations, summed over every source we capture (each is a lower bound)
+        frames = [_latest(store, "liquidations", ex, sym, now_ms() - 86_400_000)
+                  for ex, sym in (("okx", inst), ("binance", fut), ("bybit", fut))]
+        frames = [f.select("side", "notional_usd") for f in frames if not f.is_empty()]
+        if frames:
+            liq = pl.concat(frames, how="diagonal_relaxed")
             d.update(long_liq_usd_24h=float(liq.filter(pl.col("side") == "long_liq")["notional_usd"].fill_null(0).sum()),
                      short_liq_usd_24h=float(liq.filter(pl.col("side") == "short_liq")["notional_usd"].fill_null(0).sum()))
         out["derivatives"].append(d)
@@ -100,6 +104,8 @@ def strategy_snapshot(settings: Settings, store: ParquetStore) -> dict:
 
     out: dict = {"rows": [], "regime": None, "generated": None}
     rep = ROOT / "reports" / "backtest_report.json"
+    if not rep.exists():  # fall back to the committed 2026-10-17 research snapshot
+        rep = ROOT / "reports" / "samples" / "backtest_report.json"
     if rep.exists():
         d = json.loads(rep.read_text())
         out["generated"] = d["meta"]["generated_at_utc"][:16] + "Z"

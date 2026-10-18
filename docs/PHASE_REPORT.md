@@ -44,6 +44,8 @@
 | PAPER fleet (전략×시장 인스턴스 격리, 공용 WS, 재시작 복원) | TESTED | 3분 실행(9개 인스턴스) + Docker 컨테이너 실행 + `test_ops` |
 | 텔레그램 알림 / 헬스체크 핑 / 워치독 자동 재시작 | IMPLEMENTED · Mock TESTED | 실제 텔레그램 발송은 운영자 Mac 에서 `notify-test` 로 확인 필요 |
 | 수집기 무기한 실행 + 시간당 압축 + 디스크 경보 | TESTED | 3분 실행: 지난 날짜 563개 파일 → 15개 |
+| Binance·Bybit 강제청산 WS 수집 (공용 루프, 재연결 gap, 방향 정규화) | IMPLEMENTED · TESTED (가짜 WS 서버) | 실제 스트림 검증은 한국 회선(Mac) 적용 후. 미국 클라우드에서는 차단돼 자동 제외 확인 |
+| 1시간 청산 피처 (`long_liq_usd`, 커버리지 밖 null) → B2 원설계 백테스트 연결 | IMPLEMENTED · TESTED | 데이터가 쌓이면 사용 가능 |
 | 실시간 Binance 파생 피드 (B 전략 PAPER) | IMPLEMENTED · Mock TESTED · **BLOCKED here** | 한국 회선에서 `probe` 로 확인. 차단 시 B 인스턴스 자동 제외 |
 | PAPER vs 백테스트 비교 리포트 (가동률·신호 일치·슬리피지·스프레드·공백) | TESTED | `paper-report`, `test_ops` |
 | UpbitLiveBroker (중복 방지, UNKNOWN 처리, 재전송 금지, reconcile, 3중 게이트) | IMPLEMENTED · Mock TESTED | 실주문 없음. LIVE 비활성 |

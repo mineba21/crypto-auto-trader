@@ -60,8 +60,12 @@ def test_liquidation_parsers_normalise_side_and_notional():
     rows = okx_liq({"data": [{"instId": "BTC-USDT-SWAP", "details": [{"bkPx": "100", "sz": "3", "posSide": "long",
                                                                        "side": "sell", "ts": "7"}]}]}, 9, {"BTC-USDT-SWAP": 0.01})
     assert rows[0]["side"] == "long_liq" and abs(rows[0]["notional_usd"] - 3.0) < 1e-9
-    b = bybit_liq({"data": [{"T": 5, "s": "BTCUSDT", "S": "Buy", "v": "2", "p": "10"}]}, 6)
-    assert b[0]["side"] == "short_liq" and b[0]["notional_usd"] == 20.0
+    # Bybit docs: "When you receive a Buy update, this means that a long position has been liquidated."
+    b = bybit_liq({"topic": "allLiquidation.BTCUSDT",
+                   "data": [{"T": 5, "s": "BTCUSDT", "S": "Buy", "v": "2", "p": "10"},
+                            {"T": 6, "s": "BTCUSDT", "S": "Sell", "v": "1", "p": "10"}]}, 6)
+    assert [x["side"] for x in b] == ["long_liq", "short_liq"] and b[0]["notional_usd"] == 20.0
+    assert bybit_liq({"op": "pong", "success": True}, 1) == []
     assert swap_inst("ETHUSDT") == "ETH-USDT-SWAP"
 
 

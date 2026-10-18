@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import polars as pl
 
 from crypto_trader.core.timeutils import INTERVAL_MS
-from crypto_trader.features.derivatives import add_derivative_features, asof_align
+from crypto_trader.features.derivatives import add_derivative_features, asof_align, liquidation_bars
 from crypto_trader.features.orderflow import orderbook_frame_obi, trades_to_bars
 from crypto_trader.storage.parquet_store import ParquetStore
 
@@ -58,6 +58,7 @@ def load_research_frame(store: ParquetStore, market: str, interval: str, futures
         else:
             av.derivatives_first, av.derivatives_last = int(metrics["event_ts"].min()), int(metrics["event_ts"].max())
         bars = add_derivative_features(bars, metrics, funding, premium, fk, bar_ms)
+        bars = attach_liquidations(store, bars, futures_symbol, bar_ms, av)
     # USDT-adjusted spread vs Binance spot x Upbit KRW-USDT (NOT an FX kimchi premium)
     usdt = load_upbit_bars(store, "KRW-USDT", interval)
     spot = store.read("ohlcv", "binance_spot", futures_symbol) if futures_symbol else pl.DataFrame()
@@ -67,6 +68,31 @@ def load_research_frame(store: ParquetStore, market: str, interval: str, futures
         bars = asof_align(bars, spot.select("available_ts", pl.col("close").alias("gspot")), ["gspot"], "", 2 * bar_ms)
         bars = bars.with_columns((pl.col("close") / (pl.col("gspot") * pl.col("krwusdt")) - 1).alias("usdt_adjusted_spread"))
     return bars, av
+
+
+def attach_liquidations(store: ParquetStore, bars: pl.DataFrame, futures_symbol: str, bar_ms: int,
+                        av: DataAvailability | None = None) -> pl.DataFrame:
+    """Observed liquidations from every captured source (OKX / Binance / Bybit WS) -> long_liq_usd, short_liq_usd."""
+    inst = futures_symbol.removesuffix("USDT") + "-USDT-SWAP"
+    frames, gaps = [], []
+    for ex, sym in (("okx", inst), ("binance", futures_symbol), ("bybit", futures_symbol)):
+        df = store.read("liquidations", ex, sym, dedupe=False)
+        if not df.is_empty():
+            frames.append(df.select("event_ts", "side", pl.col("notional_usd").cast(pl.Float64).fill_null(0.0),
+                                    pl.lit(ex).alias("source")))
+        g = store.read("gaps", ex, sym)
+        if not g.is_empty() and "stream" in g.columns:
+            g = g.filter(pl.col("stream") == "liquidations")
+            gaps += list(zip(g["event_ts"].to_list(), g["end_ts"].to_list(), strict=True))
+    lb = liquidation_bars(pl.concat(frames, how="diagonal_relaxed"), bar_ms, gaps) if frames else pl.DataFrame()
+    if lb.is_empty():
+        if av is not None:
+            av.notes.append("no liquidation coverage yet (live capture only)")
+        return bars.with_columns(pl.lit(None, dtype=pl.Float64).alias("long_liq_usd"),
+                                 pl.lit(None, dtype=pl.Float64).alias("short_liq_usd"))
+    if av is not None:
+        av.notes.append(f"liquidations covered {lb.height} bars from {len(frames)} source(s)")
+    return asof_align(bars, lb, ["long_liq_usd", "short_liq_usd"], "", max_age_ms=bar_ms)
 
 
 def load_trade_bars(store: ParquetStore, market: str, interval: str = "5m") -> tuple[pl.DataFrame, DataAvailability]:

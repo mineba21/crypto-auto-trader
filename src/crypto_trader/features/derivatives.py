@@ -78,3 +78,32 @@ def fx_adjusted_premium(krw_price: np.ndarray, usd_price_global: np.ndarray, usd
 def futures_basis(fut_price: np.ndarray, spot_price: np.ndarray) -> np.ndarray:
     with np.errstate(invalid="ignore", divide="ignore"):
         return fut_price / spot_price - 1.0
+
+
+def liquidation_bars(liq: pl.DataFrame, bar_ms: int, gaps: list[tuple[int, int]] | None = None) -> pl.DataFrame:
+    """Hourly (bar_ms) observed liquidation notional per side, usable only after the bucket closes.
+
+    ``liq`` holds rows from one or more sources (columns: event_ts, side, notional_usd, source). Coverage is the
+    window every present source was recording (latest first event .. earliest last event); buckets outside it, or
+    overlapping a recorded stream gap, are null (unknown) — never zero. Totals are lower bounds (throttled feeds).
+    """
+    if liq.is_empty():
+        return pl.DataFrame()
+    cov = liq.group_by("source").agg(pl.col("event_ts").min().alias("lo"), pl.col("event_ts").max().alias("hi"))
+    start = int(cov["lo"].max()) // bar_ms * bar_ms + bar_ms  # first full bucket after every source is live
+    end = int(cov["hi"].min()) // bar_ms * bar_ms  # last full bucket before any source stopped
+    if end <= start:
+        return pl.DataFrame()
+    grid = pl.DataFrame({"event_ts": np.arange(start, end, bar_ms, dtype=np.int64)})
+    agg = (liq.filter((pl.col("event_ts") >= start) & (pl.col("event_ts") < end))
+           .with_columns((pl.col("event_ts") // bar_ms * bar_ms).alias("bucket"))
+           .group_by("bucket").agg(
+               pl.col("notional_usd").filter(pl.col("side") == "long_liq").sum().alias("long_liq_usd"),
+               pl.col("notional_usd").filter(pl.col("side") == "short_liq").sum().alias("short_liq_usd")))
+    out = grid.join(agg, left_on="event_ts", right_on="bucket", how="left").with_columns(
+        pl.col("long_liq_usd").fill_null(0.0), pl.col("short_liq_usd").fill_null(0.0),
+        (pl.col("event_ts") + bar_ms).alias("available_ts"))
+    for s, e in gaps or []:
+        hit = (pl.col("event_ts") < e) & (pl.col("event_ts") + bar_ms > s)
+        out = out.with_columns([pl.when(hit).then(None).otherwise(pl.col(c)).alias(c) for c in ("long_liq_usd", "short_liq_usd")])
+    return out.sort("event_ts")

@@ -11,3 +11,5 @@ config/live_approval.json
 reports/*.html
 !reports/samples/
 logs/
+reports/*.json
+reports/*.txt

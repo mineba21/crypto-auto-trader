@@ -13,11 +13,14 @@ from pathlib import Path
 import httpx
 import polars as pl
 
+from crypto_trader.collectors.binance import liquidations as binance_liq
 from crypto_trader.collectors.binance.archive import BinanceArchive
 from crypto_trader.collectors.binance.futures_rest import BinanceFuturesRest
 from crypto_trader.collectors.bithumb.rest import BithumbRest
+from crypto_trader.collectors.bybit import ws as bybit_ws
 from crypto_trader.collectors.bybit.rest import BybitRest
 from crypto_trader.collectors.http import AccessBlocked, HttpClient
+from crypto_trader.collectors.liquidation_stream import StreamStats
 from crypto_trader.collectors.okx import client as okx
 from crypto_trader.collectors.upbit.rest import UpbitRest
 from crypto_trader.collectors.upbit.ws import UpbitWsCollector
@@ -256,13 +259,28 @@ async def collect_live(store: ParquetStore, markets: list[str], binance_symbols:
         finally:
             ops.stop()
 
+    # Binance / Bybit liquidation WS: only where the exchange serves this network (checked once, never bypassed)
+    access = await check_blocked_sources()
+    stats["liquidation_sources"] = {"okx": "OK", **access}
+    liq_stats: dict = {}
+    extra = []
+    if access.get("binance_fapi") == "OK":
+        liq_stats["binance"] = StreamStats()
+        extra.append(binance_liq.run_liquidations(binance_symbols, store, duration_s, liq_stats["binance"]))
+    if access.get("bybit_v5") == "OK":
+        liq_stats["bybit"] = StreamStats()
+        extra.append(bybit_ws.run_liquidations(binance_symbols, store, duration_s, liq_stats["bybit"]))
+    ws.liquidation_stats = liq_stats  # read by CollectorOps for daily stats / gap alerts
+    log.info("liquidation sources: %s", stats["liquidation_sources"])
     try:
         res = await asyncio.gather(ws.run(duration_s), okx.run_liquidations(insts, store, rest, duration_s), poller(),
-                                   maintenance(), return_exceptions=True)
+                                   maintenance(), *extra, return_exceptions=True)
     finally:
         await rest.close()
         await ws.rest.close()
     stats["okx_liquidations"] = res[1] if not isinstance(res[1], Exception) else repr(res[1])
+    stats["liquidations"] = {k: {"rows": v.rows, "reconnects": v.reconnects, "last_error": v.last_error}
+                             for k, v in liq_stats.items()}
     stats["upbit_ws"] = {**asdict(ws.health), "trades_rows": ws.sinks["trades"].rows_written,
                          "orderbook_rows": ws.sinks["orderbook"].rows_written}
     stats["errors"] = [repr(r) for r in res if isinstance(r, Exception)]

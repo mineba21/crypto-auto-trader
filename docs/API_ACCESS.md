@@ -6,6 +6,19 @@
 > 대한민국 네트워크에서 측정한 결과가 아닙니다. 운영 서버(한국)에서 `uv run cat probe` 를 다시 실행해 이 표를 갱신해야 합니다.
 > 지역 차단된 API에는 프록시·VPN 같은 우회 수단을 쓰지 않았고, 우회 기능도 만들지 않았습니다.
 
+## 대한민국 회선 측정 (2026-10-18, 운영자 MacBook, `scripts/mac_start.sh` 5단계)
+
+| 공급원 | 결과 | 비고 |
+|---|---|---|
+| Binance USD-M REST (`fapi`) | **OK** | B1 실시간 파생 피드 정상 (`collectors/binance/live_feed.py`) |
+| Bybit V5 REST | **OK** | 청산 WS(`allLiquidation`) 수집 대상 |
+| Binance `@forceOrder` WS | 연결은 됨 | 15초 안에 청산이 없어 메시지 없음 → probe 에 ERROR(timeout) 로 표시됐지만 차단은 아님 |
+
+→ 운영(한국)에서는 Binance·Bybit 를 정상 소스로 씁니다. 아래 표는 개발용 미국 클라우드에서 측정한 원래 결과입니다.
+수집기는 시작할 때마다 REST 로 접근을 다시 확인하고, 차단된 소스는 건너뜁니다(우회 없음).
+
+## 개발 클라우드 측정 (2026-10-17, 미국)
+
 | 공급원 | 경로 | 결과(이 컨테이너) | 비고 |
 |---|---|---|---|
 | Upbit REST quotation | `api.upbit.com/v1/*` | **OK** (≈220 ms) | `Remaining-Req: group=…; min=600; sec=9` → 그룹별 초당 약 10회 |
@@ -17,7 +30,7 @@
 | Binance USD-M REST | `fapi.binance.com` | **BLOCKED (HTTP 451)** | "restricted location" (이 컨테이너의 지역 기준) |
 | Binance futures WS | `fstream.binance.com` | 판단 불가 | 15초 안에 메시지 없음(타임아웃). REST가 차단된 지역이라 더 시도하지 않음 |
 | Binance 공식 아카이브 | `data.binance.vision` | **OK** | 과거 klines, metrics(OI), fundingRate, premiumIndexKlines. **liquidationSnapshot 은 404 (미제공)** |
-| Bybit V5 REST | `api.bybit.com` | **BLOCKED (HTTP 403)** | CloudFront 국가 차단. `stream.bybit.com` WS는 열렸지만, REST의 차단 의도를 존중해 이 지역에서는 수집하지 않음 |
+| Bybit V5 REST | `api.bybit.com` | **BLOCKED (HTTP 403)** | CloudFront 국가 차단. `stream.bybit.com` WS는 열렸지만, REST의 차단 의도를 존중해 이 지역에서는 수집하지 않음 (한국에서는 OK) |
 | OKX V5 REST | `www.okx.com/api/v5/*` | **OK** | OI, funding 이력, rubik OI 이력, 현물 시세 |
 | OKX WS | `wss://ws.okx.com/ws/v5/public` | **OK** (443 포트) | `liquidation-orders` 실시간 수신. `:8443` 포트는 연결이 끊김(reset) |
 
@@ -36,6 +49,9 @@
 - `futures/um/*/klines`: 헤더 있음, ms 단위입니다.
 - `fundingRate`: 확정(settled) 값만 있습니다. 실시간 추정치는 별도 시리즈(`funding/okx_estimate`, `is_settled=False`)로 저장합니다.
 - 강제청산: 공개 과거 아카이브가 없습니다. 실시간 WS로 수집한 이벤트만 존재하며, 거래소가 이벤트를 집계·제한할 수 있으므로 **하한값(lower bound)** 으로 취급합니다.
+  - Binance `!forceOrder@arr`: 심볼당 1000ms 안의 **마지막 1건만** 전송됩니다. `S=SELL` 은 롱 강제청산입니다.
+  - Bybit `allLiquidation.{symbol}`: 500ms 주기입니다. 문서상 **`S=Buy` 가 롱 포지션 청산**이고, `p` 는 파산가격입니다.
+  - OKX `liquidation-orders`: `posSide=long` 이 롱 청산입니다. 수량은 계약 수라서 `ctVal` 을 곱해 명목가를 구합니다.
 
 ## 재연결 시 누락 복구
 

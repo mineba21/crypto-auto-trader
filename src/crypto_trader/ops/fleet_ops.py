@@ -150,6 +150,7 @@ class CollectorOps:
         self.day_start_rows: dict | None = None
         self.day = ""
         self.seen_gaps = 0
+        self.seen_liq_gaps: dict[str, int] = {}
 
     def start(self) -> None:
         self.watchdog.start()
@@ -163,6 +164,13 @@ class CollectorOps:
         self.watchdog.tick()
         self.db.heartbeat("collector", "OK" if self.ws.health.connected else "WS_DOWN", self.ws.health.last_error[:200])
         rows = self.sinks_stats()
+        for name, st in getattr(self.ws, "liquidation_stats", {}).items():
+            rows[f"liq_{name}"] = st.rows
+            if len(st.gaps) > self.seen_liq_gaps.get(name, 0):
+                g = st.gaps[-1]
+                self.notifier.send(f"⚠️ {name} liquidation stream gap: {g.get('reason')}", key=f"lgap:{name}",
+                                   min_interval_s=1800)
+                self.seen_liq_gaps[name] = len(st.gaps)
         day = ms_to_kst(now_ms()).strftime("%Y-%m-%d")
         if day != self.day:
             self.day, self.day_start_rows = day, dict(rows)
